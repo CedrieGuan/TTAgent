@@ -8,6 +8,7 @@ import { useStream } from '@hooks/useStream'
 import { useTheme } from '@hooks/useTheme'
 import { useSettingsStore } from '@stores/settings.store'
 import { useSessionStore } from '@stores/session.store'
+import { useSkillStore } from '@stores/skill.store'
 
 type Page = 'chat' | 'history' | 'settings' | 'agent-config'
 
@@ -15,17 +16,19 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>('chat')
   const { loadSettings } = useSettingsStore()
   const { loadSessions } = useSessionStore()
+  const { discoverSkills } = useSkillStore()
 
   // 注册全局流式监听
   useStream()
   // 主题/字体应用
   useTheme()
 
-  // 启动时加载配置和会话列表
+  // 启动时加载配置、会话列表和技能
   useEffect(() => {
     loadSettings()
     loadSessions()
-  }, [loadSettings, loadSessions])
+    discoverSkills()
+  }, [loadSettings, loadSessions, discoverSkills])
 
   const renderPage = () => {
     switch (currentPage) {

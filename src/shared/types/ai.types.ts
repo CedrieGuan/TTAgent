@@ -27,6 +27,8 @@ export interface ChatMessage {
   /** 本条消息触发的工具调用列表 */
   toolCalls?: MCPToolCall[]
   toolResults?: MCPToolResult[]
+  /** 本条消息激活的技能（通过斜杠命令触发） */
+  activatedSkill?: { name: string; description: string }
   isError?: boolean
 }
 

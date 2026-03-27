@@ -83,11 +83,15 @@ AI handler 实现了多轮工具调用循环（最多 `MAX_AGENT_ITERATIONS = 15
 
 ### 技能（Skill）系统
 
-技能是附加系统提示，用于切换 AI 行为模式，持久化于 `electron-store` 的 `agentSkills` key：
+技能基于文件系统的 SKILL.md 文件，采用类 Claude Code 的渐进式加载架构：
 
-- 内置技能定义在 `src/shared/constants/builtin-skills.ts`（代码审查、翻译、写作、数据分析），`isBuiltIn: true` 时不可删除
-- 自定义技能可通过 `skill.handler.ts` CRUD，渲染进程通过 `skill.store.ts` 管理
-- 类型定义在 `src/shared/types/skill.types.ts`
+- 技能以 `SKILL.md` 文件存放在 app userData 目录的 `skills/<技能名>/SKILL.md`
+- SKILL.md 使用 YAML frontmatter 定义元数据（name、description、disable-model-invocation），markdown 正文为具体指令
+- 发现：`src/main/lib/skill-parser.ts` 扫描技能目录，解析 frontmatter（使用 `gray-matter` 库）
+- IPC：`skill.handler.ts` 提供 `SKILL_DISCOVER`（扫描摘要）、`SKILL_LOAD`（加载完整指令）、`SKILL_OPEN_DIR`（打开目录）
+- 注入策略：初始只将技能名称和描述注入系统提示概览；用户在聊天中输入 `/技能名` 时才加载并注入完整指令
+- 渲染进程通过 `useSlashCommand` hook 提供斜杠命令检测和候选补全
+- 类型定义在 `src/shared/types/skill.types.ts`（`Skill`、`SkillSummary`、`SkillMeta`）
 
 ### 上下文管理
 
@@ -112,7 +116,7 @@ AI handler 实现了多轮工具调用循环（最多 `MAX_AGENT_ITERATIONS = 15
 - IPC 载荷（`AIRequestPayload`、`AIStreamChunk`、`UpdateSessionPayload`）→ `src/shared/types/ipc.types.ts`
 - 会话结构 → `src/shared/types/session.types.ts`
 - MCP 相关 → `src/shared/types/mcp.types.ts`
-- 技能 → `src/shared/types/skill.types.ts`
+- 技能（`Skill`、`SkillSummary`、`SkillMeta`）→ `src/shared/types/skill.types.ts`
 - 上下文管理（`TokenBudget`、`ContextStrategyConfig`、`ContextEvent`）→ `src/shared/types/context.types.ts`
 
 ### 注意事项

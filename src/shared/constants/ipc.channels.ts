@@ -33,12 +33,10 @@ export const IPC_CHANNELS = {
   CONTEXT_EVENT: 'context:event',
   CONTEXT_COMPRESS: 'context:compress',
 
-  // Agent 技能
-  SKILL_LIST: 'skill:list',
-  SKILL_CREATE: 'skill:create',
-  SKILL_UPDATE: 'skill:update',
-  SKILL_DELETE: 'skill:delete',
-  SKILL_TOGGLE: 'skill:toggle',
+  // 文件技能（基于 SKILL.md）
+  SKILL_DISCOVER: 'skill:discover',
+  SKILL_LOAD: 'skill:load',
+  SKILL_OPEN_DIR: 'skill:open-dir',
 
   // 系统 / 窗口
   APP_VERSION: 'app:version',

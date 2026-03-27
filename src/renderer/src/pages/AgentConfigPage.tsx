@@ -8,7 +8,7 @@ import { Input } from '@components/ui/Input'
 export function AgentConfigPage() {
   const { agentSystemPrompt, updateAgentSystemPrompt } = useSettingsStore()
   const { mcpServers, connectServer, disconnectServer, loadMCPServers } = useAgentStore()
-  const { skills, loadSkills, createSkill, updateSkill, deleteSkill, toggleSkill } = useSkillStore()
+  const { summaries, discovering, discoverSkills, openSkillDir } = useSkillStore()
   const [prompt, setPrompt] = useState(agentSystemPrompt)
   const [promptSaved, setPromptSaved] = useState(false)
 
@@ -18,23 +18,17 @@ export function AgentConfigPage() {
   const [serverArgs, setServerArgs] = useState('')
   const [connecting, setConnecting] = useState(false)
 
-  // Skills 表单
-  const [showSkillForm, setShowSkillForm] = useState(false)
-  const [skillName, setSkillName] = useState('')
-  const [skillDesc, setSkillDesc] = useState('')
-  const [skillInstructions, setSkillInstructions] = useState('')
+  // Skills 展开状态
   const [expandedSkill, setExpandedSkill] = useState<string | null>(null)
-  const [editInstructions, setEditInstructions] = useState('')
-  const [creatingSkill, setCreatingSkill] = useState(false)
-  const [savingSkill, setSavingSkill] = useState<string | null>(null)
+  const [expandedInstructions, setExpandedInstructions] = useState('')
 
   React.useEffect(() => {
     loadMCPServers()
   }, [loadMCPServers])
 
   React.useEffect(() => {
-    loadSkills()
-  }, [loadSkills])
+    discoverSkills()
+  }, [discoverSkills])
 
   const handleSavePrompt = async () => {
     await updateAgentSystemPrompt(prompt)
@@ -58,46 +52,19 @@ export function AgentConfigPage() {
     setConnecting(false)
   }
 
-  const handleCreateSkill = async () => {
-    if (!skillName.trim()) return
-    setCreatingSkill(true)
-    const result = await createSkill({
-      name: skillName.trim(),
-      description: skillDesc.trim(),
-      instructions: skillInstructions.trim(),
-      enabled: true
-    })
-    if (result) {
-      setSkillName('')
-      setSkillDesc('')
-      setSkillInstructions('')
-      setShowSkillForm(false)
-    }
-    setCreatingSkill(false)
-  }
-
-  const handleToggleExpand = (skillId: string, currentInstructions: string) => {
+  const handleToggleExpand = async (skillId: string) => {
     if (expandedSkill === skillId) {
       setExpandedSkill(null)
-      setEditInstructions('')
-      setSavingSkill(null)
+      setExpandedInstructions('')
     } else {
       setExpandedSkill(skillId)
-      setEditInstructions(currentInstructions)
-    }
-  }
-
-  const handleSaveInstructions = async (skillId: string) => {
-    setSavingSkill(skillId)
-    await updateSkill(skillId, { instructions: editInstructions })
-    setSavingSkill(null)
-  }
-
-  const handleDeleteSkill = async (skillId: string) => {
-    await deleteSkill(skillId)
-    if (expandedSkill === skillId) {
-      setExpandedSkill(null)
-      setEditInstructions('')
+      setExpandedInstructions('加载中...')
+      const res = await window.api.loadSkill(skillId)
+      if (res.success && res.data) {
+        setExpandedInstructions(res.data.instructions)
+      } else {
+        setExpandedInstructions('加载失败')
+      }
     }
   }
 
@@ -126,90 +93,49 @@ export function AgentConfigPage() {
           </div>
         </section>
 
-        {/* Skills */}
+        {/* Skills（文件技能） */}
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-[var(--color-text-secondary)] uppercase tracking-wide">
               Skills
             </h2>
-            <Button variant="ghost" size="sm" onClick={() => setShowSkillForm(!showSkillForm)}>
-              {showSkillForm ? '取消' : '添加 Skill'}
-            </Button>
-          </div>
-
-          {showSkillForm && (
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 space-y-3">
-              <Input
-                label="名称"
-                value={skillName}
-                onChange={(e) => setSkillName(e.target.value)}
-                placeholder="我的自定义 Skill"
-              />
-              <Input
-                label="描述"
-                value={skillDesc}
-                onChange={(e) => setSkillDesc(e.target.value)}
-                placeholder="简要描述此 Skill 的用途"
-              />
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                  指令
-                </label>
-                <textarea
-                  value={skillInstructions}
-                  onChange={(e) => setSkillInstructions(e.target.value)}
-                  rows={5}
-                  className="no-drag w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-2)] px-3 py-2.5 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)]/30 resize-y"
-                  placeholder="当用户请求...时，你应该..."
-                />
-              </div>
+            <div className="flex items-center gap-2">
               <Button
-                variant="primary"
-                loading={creatingSkill}
-                disabled={!skillName.trim()}
-                onClick={handleCreateSkill}
+                variant="ghost"
+                size="sm"
+                loading={discovering}
+                onClick={() => discoverSkills()}
               >
-                创建
+                刷新
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => openSkillDir()}>
+                打开文件夹
               </Button>
             </div>
-          )}
+          </div>
 
-          {skills.length > 0 ? (
+          <p className="text-xs text-[var(--color-text-muted)]">
+            技能以 SKILL.md 文件定义在技能目录中。点击「打开文件夹」创建或编辑技能，使用 /技能名
+            在聊天中触发。
+          </p>
+
+          {summaries.length > 0 ? (
             <div className="rounded-lg border border-[var(--color-border)] divide-y divide-[var(--color-border)] overflow-hidden">
-              {skills.map((skill) => (
+              {summaries.map((skill) => (
                 <div key={skill.id}>
                   <div
                     className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-[var(--color-bg-hover)] transition-colors duration-150"
-                    onClick={() => handleToggleExpand(skill.id, skill.instructions)}
+                    onClick={() => handleToggleExpand(skill.id)}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <button
-                        className="no-drag relative inline-flex h-4 w-7 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200"
-                        style={{
-                          backgroundColor: skill.enabled
-                            ? 'var(--color-accent)'
-                            : 'var(--color-border)'
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          toggleSkill(skill.id, !skill.enabled)
-                        }}
-                      >
-                        <span
-                          className="inline-block h-3 w-3 rounded-full bg-white transition-transform duration-200"
-                          style={{
-                            transform: skill.enabled ? 'translateX(14px)' : 'translateX(2px)'
-                          }}
-                        />
-                      </button>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-[var(--color-text-primary)] truncate">
-                            {skill.name}
+                            /{skill.name}
                           </span>
-                          {skill.isBuiltIn && (
+                          {skill.disableModelInvocation && (
                             <span className="shrink-0 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-[var(--color-accent-subtle)] text-[var(--color-accent)]">
-                              内置
+                              仅手动
                             </span>
                           )}
                         </div>
@@ -221,22 +147,11 @@ export function AgentConfigPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0 ml-3">
-                      {!skill.isBuiltIn && (
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            handleDeleteSkill(skill.id)
-                          }}
-                        >
-                          删除
-                        </Button>
-                      )}
                       <svg
                         className="h-4 w-4 text-[var(--color-text-muted)] transition-transform duration-200 shrink-0"
                         style={{
-                          transform: expandedSkill === skill.id ? 'rotate(180deg)' : 'rotate(0deg)'
+                          transform:
+                            expandedSkill === skill.id ? 'rotate(180deg)' : 'rotate(0deg)'
                         }}
                         viewBox="0 0 20 20"
                         fill="currentColor"
@@ -253,28 +168,17 @@ export function AgentConfigPage() {
                   {expandedSkill === skill.id && (
                     <div className="px-4 pb-3 pt-1 bg-[var(--color-bg-surface)] border-t border-[var(--color-border-subtle)]">
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
-                          指令内容
-                        </label>
-                        <textarea
-                          value={editInstructions}
-                          onChange={(e) => setEditInstructions(e.target.value)}
-                          rows={6}
-                          className="no-drag w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-2)] px-3 py-2.5 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)]/30 resize-y"
-                          readOnly={skill.isBuiltIn}
-                        />
-                        {!skill.isBuiltIn && (
-                          <div className="flex justify-end">
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              loading={savingSkill === skill.id}
-                              onClick={() => handleSaveInstructions(skill.id)}
-                            >
-                              保存指令
-                            </Button>
-                          </div>
-                        )}
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-medium text-[var(--color-text-secondary)] uppercase tracking-wide">
+                            指令内容
+                          </label>
+                          <span className="text-[10px] text-[var(--color-text-muted)]">
+                            {skill.filePath}
+                          </span>
+                        </div>
+                        <pre className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-2)] px-3 py-2.5 text-sm text-[var(--color-text-primary)] whitespace-pre-wrap overflow-auto max-h-64">
+                          {expandedInstructions}
+                        </pre>
                       </div>
                     </div>
                   )}
@@ -283,7 +187,11 @@ export function AgentConfigPage() {
             </div>
           ) : (
             <div className="rounded-lg border border-dashed border-[var(--color-border)] py-8 text-center">
-              <p className="text-sm text-[var(--color-text-muted)]">暂无 Skill，点击上方按钮添加</p>
+              <p className="text-sm text-[var(--color-text-muted)]">
+                {discovering
+                  ? '正在扫描技能目录...'
+                  : '暂无 Skill，点击「打开文件夹」创建 SKILL.md'}
+              </p>
             </div>
           )}
         </section>

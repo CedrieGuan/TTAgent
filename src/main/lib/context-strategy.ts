@@ -1,3 +1,12 @@
+/**
+ * 上下文管理策略模块
+ * 负责在 token 超出预算时对消息历史进行裁剪、卸载或摘要压缩
+ *
+ * 策略执行顺序：
+ * 1. 计算 token 预算，若低于软阈值则直接放行
+ * 2. Pass 1：卸载超大消息（替换为占位摘要）
+ * 3. Pass 2：截断最旧的对话轮次，直到满足硬阈值
+ */
 import type { ProviderConfig } from '@shared/types/ai.types'
 import type { ChatMessage } from '@shared/types/ai.types'
 import type { MCPTool } from '@shared/types/mcp.types'
@@ -22,6 +31,7 @@ import { store } from '../store'
 import OpenAI from 'openai'
 import { ZHIPUAI_BASE_URL } from '@shared/constants/providers'
 
+/** 格式化 token 数为可读字符串（K/M 单位） */
 function formatTokenCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
@@ -38,6 +48,9 @@ interface ContextManagerOpts {
   config?: Partial<ContextStrategyConfig>
 }
 
+/**
+ * 主入口：管理上下文，返回裁剪后的消息列表和事件
+ */
 export function manageContext(opts: ContextManagerOpts): ContextManagerResult {
   const config: ContextStrategyConfig = {
     ...DEFAULT_CONTEXT_STRATEGY_CONFIG,
@@ -51,6 +64,7 @@ export function manageContext(opts: ContextManagerOpts): ContextManagerResult {
   const events: ContextEvent[] = []
   const budget = calculateBudget(opts.contextWindow, opts.maxTokens, opts.tools.length > 0)
 
+  // 计算系统提示和工具定义占用的固定 token 开销
   const fixedOverhead =
     estimateSystemPromptTokens(opts.systemPrompt) + estimateToolSchemaTokens(opts.tools.length)
   const availableForHistory = budget.usableInputBudget - fixedOverhead
@@ -67,12 +81,14 @@ export function manageContext(opts: ContextManagerOpts): ContextManagerResult {
 
   let turns = deriveTurns(opts.messages)
 
+  // 为每个轮次估算 token 数
   for (const turn of turns) {
     turn.tokenEstimate = countMessagesTokens(turn.messages)
   }
 
   let currentTotal = turns.reduce((sum, t) => sum + t.tokenEstimate, 0)
 
+  // 低于软阈值：无需管理，直接返回并上报预算信息
   if (currentTotal <= availableForHistory * config.softThreshold) {
     const usagePercent = Math.round(
       ((currentTotal + fixedOverhead) / budget.usableInputBudget) * 100
@@ -111,11 +127,11 @@ export function manageContext(opts: ContextManagerOpts): ContextManagerResult {
     )
   )
 
-  // Pass 1: Offload oversized messages
+  // Pass 1：卸载超大消息（将内容替换为占位摘要）
   turns = applyOffloading(turns, config.offloadThreshold, opts.sessionId, events)
   currentTotal = turns.reduce((sum, t) => sum + t.tokenEstimate, 0)
 
-  // Pass 2: Truncate oldest turns
+  // Pass 2：截断最旧的轮次，直到满足硬阈值
   const hardLimit = availableForHistory * config.hardThreshold
   if (currentTotal > hardLimit) {
     turns = applyTruncation(turns, hardLimit, opts.sessionId, events)
@@ -125,15 +141,10 @@ export function manageContext(opts: ContextManagerOpts): ContextManagerResult {
   const finalMessages = flattenTurns(turns)
   const totalTokens = currentTotal + fixedOverhead
 
-  return {
-    messages: finalMessages,
-    events,
-    budget,
-    totalTokens,
-    wasManaged: true
-  }
+  return { messages: finalMessages, events, budget, totalTokens, wasManaged: true }
 }
 
+/** 不做任何管理，直接透传（上下文管理被禁用时使用） */
 function passThrough(opts: ContextManagerOpts): ContextManagerResult {
   const budget = calculateBudget(opts.contextWindow, opts.maxTokens, opts.tools.length > 0)
   const totalTokens =
@@ -143,6 +154,10 @@ function passThrough(opts: ContextManagerOpts): ContextManagerResult {
   return { messages: opts.messages, events: [], budget, totalTokens, wasManaged: false }
 }
 
+/**
+ * Pass 1：卸载超大消息
+ * 将非当前轮次中超过 offloadThreshold 的消息内容替换为占位摘要
+ */
 function applyOffloading(
   turns: ConversationTurn[],
   offloadThreshold: number,
@@ -156,6 +171,7 @@ function applyOffloading(
     ...turn,
     messages: turn.messages.map((msg) => {
       const tokens = countMessageTokens(msg)
+      // 未超阈值或属于当前轮次则跳过
       if (tokens <= offloadThreshold) return msg
       if (turn.isCurrentTurn) return msg
 
@@ -166,10 +182,7 @@ function applyOffloading(
       offloadedCount++
       tokensSaved += tokens - countTextTokens(placeholder)
 
-      return {
-        ...msg,
-        content: placeholder
-      } as ChatMessage
+      return { ...msg, content: placeholder } as ChatMessage
     })
   }))
 
@@ -182,6 +195,7 @@ function applyOffloading(
     )
   }
 
+  // 重新计算各轮次的 token 估算值
   for (const turn of result) {
     turn.tokenEstimate = countMessagesTokens(turn.messages)
   }
@@ -189,6 +203,10 @@ function applyOffloading(
   return result
 }
 
+/**
+ * Pass 2：截断最旧的对话轮次
+ * 保留当前轮次（受保护），从最旧的可移除轮次开始丢弃，直到满足 targetBudget
+ */
 function applyTruncation(
   turns: ConversationTurn[],
   targetBudget: number,
@@ -210,6 +228,7 @@ function applyTruncation(
   const budgetForRemovable = targetBudget - currentProtectedTokens
 
   if (budgetForRemovable <= 0) {
+    // 当前轮次本身已超出预算，只能保留当前轮次
     events.push(
       createEvent('context_warning', sessionId, '当前对话轮次已超出预算', {
         totalTokens: currentProtectedTokens,
@@ -222,7 +241,7 @@ function applyTruncation(
   const kept: ConversationTurn[] = []
   let accumulated = 0
 
-  // Keep the MOST RECENT removable turns that fit
+  // 从最新的可移除轮次开始保留，尽量保留更多近期历史
   for (let i = removableTurns.length - 1; i >= 0; i--) {
     const turn = removableTurns[i]
     if (accumulated + turn.tokenEstimate <= budgetForRemovable) {
@@ -244,6 +263,10 @@ function applyTruncation(
   return [...kept, ...protectedTurns]
 }
 
+/**
+ * 摘要压缩：将多个旧轮次调用 LLM 生成摘要，替换为单条 system 消息
+ * 失败时自动回退到截断策略
+ */
 export async function summarizeTurns(
   turns: ConversationTurn[],
   sessionId: string,
@@ -253,11 +276,7 @@ export async function summarizeTurns(
   if (removableTurns.length < 2) return turns
 
   events.push(
-    createEvent(
-      'context_summary_started',
-      sessionId,
-      `正在总结 ${removableTurns.length} 轮旧对话...`
-    )
+    createEvent('context_summary_started', sessionId, `正在总结 ${removableTurns.length} 轮旧对话...`)
   )
 
   try {
@@ -269,6 +288,7 @@ export async function summarizeTurns(
       return turns
     }
 
+    // 将摘要包装为一个虚拟轮次
     const summaryTurn: ConversationTurn = {
       id: `summary-${Date.now()}`,
       startIndex: -1,
@@ -290,16 +310,11 @@ export async function summarizeTurns(
     const result = [summaryTurn, ...protectedTurns]
 
     events.push(
-      createEvent(
-        'context_summary_completed',
-        sessionId,
-        `已将 ${removableTurns.length} 轮对话压缩为摘要`,
-        {
-          turnsSummarized: removableTurns.length,
-          tokensSaved:
-            removableTurns.reduce((s, t) => s + t.tokenEstimate, 0) - summaryTurn.tokenEstimate
-        }
-      )
+      createEvent('context_summary_completed', sessionId, `已将 ${removableTurns.length} 轮对话压缩为摘要`, {
+        turnsSummarized: removableTurns.length,
+        tokensSaved:
+          removableTurns.reduce((s, t) => s + t.tokenEstimate, 0) - summaryTurn.tokenEstimate
+      })
     )
 
     return result
@@ -309,6 +324,7 @@ export async function summarizeTurns(
   }
 }
 
+/** 构建发送给 LLM 的摘要生成提示词 */
 function buildSummarizationPrompt(turns: ConversationTurn[]): string {
   const parts = turns.map((turn) => {
     const userMsg = turn.messages.find(
@@ -316,10 +332,7 @@ function buildSummarizationPrompt(turns: ConversationTurn[]): string {
     )
     const assistantMsgs = turn.messages.filter((m) => m.role === 'assistant')
     const userText = userMsg?.content ?? ''
-    const assistantText = assistantMsgs
-      .map((m) => m.content)
-      .filter(Boolean)
-      .join('\n')
+    const assistantText = assistantMsgs.map((m) => m.content).filter(Boolean).join('\n')
     return `用户: ${userText.slice(0, 200)}\n助手: ${assistantText.slice(0, 300)}`
   })
 
@@ -331,10 +344,13 @@ ${parts.join('\n\n---\n\n')}
 摘要:`
 }
 
+/**
+ * 调用 LLM 生成摘要
+ * 按优先级选择最便宜的可用提供商：智谱 AI > OpenAI > Anthropic
+ */
 async function callSummaryLLM(prompt: string): Promise<string | null> {
   const providers = store.get('providers') ?? {}
   const cheapest = findCheapestProvider(providers)
-
   if (!cheapest) return null
 
   const { provider, config } = cheapest
@@ -380,6 +396,10 @@ async function callSummaryLLM(prompt: string): Promise<string | null> {
   }
 }
 
+/**
+ * 按优先级查找最便宜的已配置提供商
+ * 优先级：智谱 AI > OpenAI > Anthropic > 其他
+ */
 function findCheapestProvider(
   providers: Partial<Record<string, ProviderConfig>>
 ): { provider: string; config: ProviderConfig } | null {
@@ -401,6 +421,10 @@ function findCheapestProvider(
   return null
 }
 
+/**
+ * Agent 循环中间检查：在每次工具调用后检查上下文是否超出预算
+ * 若超出硬阈值则立即截断，避免后续迭代失败
+ */
 export function applyMidLoopCheck(
   currentMessages: ChatMessage[],
   contextWindow: number,
@@ -411,6 +435,7 @@ export function applyMidLoopCheck(
   const budget = calculateBudget(contextWindow, maxTokens, hasTools)
   const currentTokens = countMessagesTokens(currentMessages)
 
+  // 未超出硬阈值，无需处理
   if (currentTokens <= budget.usableInputBudget * DEFAULT_CONTEXT_STRATEGY_CONFIG.hardThreshold) {
     return { messages: currentMessages, events: [] }
   }
@@ -428,8 +453,5 @@ export function applyMidLoopCheck(
     turn.tokenEstimate = countMessagesTokens(turn.messages)
   }
 
-  return {
-    messages: flattenTurns(managed),
-    events
-  }
+  return { messages: flattenTurns(managed), events }
 }

@@ -17,7 +17,7 @@ import type {
 import type { Session } from '../shared/types/session.types'
 import type { ChatMessage } from '../shared/types/ai.types'
 import type { MCPServerStatus, MCPTool } from '../shared/types/mcp.types'
-import type { AgentSkill } from '../shared/types/skill.types'
+import type { Skill, SkillSummary } from '../shared/types/skill.types'
 import type { ContextEvent } from '../shared/types/context.types'
 
 const api = {
@@ -100,23 +100,18 @@ const api = {
   disconnectMCPServer: (name: string): Promise<IPCResponse> =>
     ipcRenderer.invoke(IPC_CHANNELS.MCP_DISCONNECT_SERVER, name),
 
-  // ── Agent 技能 ────────────────────────────────────────────────
-  listSkills: (): Promise<IPCResponse<AgentSkill[]>> => ipcRenderer.invoke(IPC_CHANNELS.SKILL_LIST),
+  // ── 文件技能（基于 SKILL.md） ──────────────────────────────────
+  /** 扫描技能目录，返回所有技能摘要 */
+  discoverSkills: (): Promise<IPCResponse<SkillSummary[]>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.SKILL_DISCOVER),
 
-  createSkill: (
-    skill: Omit<AgentSkill, 'id' | 'createdAt' | 'updatedAt'>
-  ): Promise<IPCResponse<AgentSkill>> => ipcRenderer.invoke(IPC_CHANNELS.SKILL_CREATE, skill),
+  /** 按 ID 加载技能完整指令 */
+  loadSkill: (id: string): Promise<IPCResponse<Skill>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.SKILL_LOAD, id),
 
-  updateSkill: (
-    id: string,
-    updates: Partial<Pick<AgentSkill, 'name' | 'description' | 'instructions'>>
-  ): Promise<IPCResponse<AgentSkill>> => ipcRenderer.invoke(IPC_CHANNELS.SKILL_UPDATE, id, updates),
-
-  deleteSkill: (id: string): Promise<IPCResponse> =>
-    ipcRenderer.invoke(IPC_CHANNELS.SKILL_DELETE, id),
-
-  toggleSkill: (id: string, enabled: boolean): Promise<IPCResponse<AgentSkill>> =>
-    ipcRenderer.invoke(IPC_CHANNELS.SKILL_TOGGLE, id, enabled),
+  /** 用系统文件管理器打开技能目录 */
+  openSkillDir: (): Promise<IPCResponse> =>
+    ipcRenderer.invoke(IPC_CHANNELS.SKILL_OPEN_DIR),
 
   // ── 窗口控制 ──────────────────────────────────────────────────
   minimizeWindow: (): void => ipcRenderer.send(IPC_CHANNELS.WINDOW_MINIMIZE),

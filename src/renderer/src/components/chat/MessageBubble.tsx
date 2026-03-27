@@ -2,6 +2,7 @@ import React from 'react'
 import type { ChatMessage, Attachment } from '@shared/types/ai.types'
 import { formatTime } from '@lib/utils'
 import { ToolCallDisplay } from './ToolCallDisplay'
+import { SkillActivatedDisplay } from './SkillActivatedDisplay'
 
 interface MessageBubbleProps {
   message: ChatMessage
@@ -33,6 +34,14 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               <AttachmentPreview key={i} attachment={att} />
             ))}
           </div>
+        )}
+
+        {/* 技能激活提示 */}
+        {message.activatedSkill && (
+          <SkillActivatedDisplay
+            name={message.activatedSkill.name}
+            description={message.activatedSkill.description}
+          />
         )}
 
         {/* 文本内容 */}
