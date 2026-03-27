@@ -1,3 +1,8 @@
+/**
+ * 本地内置工具模块
+ * 提供文件读写、目录列表、Shell 命令执行等本地能力
+ * 工具名称统一以 "local_" 前缀标识
+ */
 import { readFile, writeFile, readdir, mkdir } from 'fs/promises'
 import { existsSync } from 'fs'
 import { execFile } from 'child_process'
@@ -5,6 +10,7 @@ import { resolve, join, dirname } from 'path'
 import { homedir } from 'os'
 import type { MCPTool } from '@shared/types/mcp.types'
 
+/** 本地工具执行器接口 */
 export interface LocalToolExecutor {
   execute(args: Record<string, unknown>): Promise<string>
 }
@@ -20,10 +26,14 @@ function localTool(name: string): string {
   return `${LOCAL_TOOL_PREFIX}${name}`
 }
 
+/** 判断工具名称是否为本地工具 */
 export function isLocalTool(toolName: string): boolean {
   return toolName.startsWith(LOCAL_TOOL_PREFIX)
 }
 
+// ── 工具定义 ──────────────────────────────────────────────────
+
+/** 读取文件内容，支持行号偏移和行数限制 */
 const readFileDef: LocalToolDefinition = {
   tool: {
     name: localTool('read_file'),
@@ -57,6 +67,7 @@ const readFileDef: LocalToolDefinition = {
         const offset = Math.max(1, (args.offset as number) ?? 1)
         const limit = (args.limit as number) ?? 2000
         const sliced = lines.slice(offset - 1, offset - 1 + limit)
+        // 返回带行号的内容，便于 AI 精确引用
         return sliced.map((line, i) => `${offset + i}: ${line}`).join('\n')
       } catch (err) {
         return `Error reading file: ${(err as Error).message}`
@@ -65,6 +76,7 @@ const readFileDef: LocalToolDefinition = {
   }
 }
 
+/** 写入文件内容，自动创建父目录 */
 const writeFileDef: LocalToolDefinition = {
   tool: {
     name: localTool('write_file'),
@@ -103,6 +115,7 @@ const writeFileDef: LocalToolDefinition = {
   }
 }
 
+/** 列出目录内容，目录名后附加 "/" 标识 */
 const listDirectoryDef: LocalToolDefinition = {
   tool: {
     name: localTool('list_directory'),
@@ -133,6 +146,7 @@ const listDirectoryDef: LocalToolDefinition = {
   }
 }
 
+/** 执行 Shell 命令，返回 stdout + stderr，支持超时控制 */
 const shellExecuteDef: LocalToolDefinition = {
   tool: {
     name: localTool('shell_execute'),
@@ -188,6 +202,7 @@ const shellExecuteDef: LocalToolDefinition = {
   }
 }
 
+/** 所有本地工具定义列表 */
 const LOCAL_TOOLS: LocalToolDefinition[] = [
   readFileDef,
   writeFileDef,
@@ -195,16 +210,20 @@ const LOCAL_TOOLS: LocalToolDefinition[] = [
   shellExecuteDef
 ]
 
+/** 工具名称 -> 执行器的快速查找 Map */
 const executorMap = new Map(LOCAL_TOOLS.map((def) => [def.tool.name, def.executor]))
 
+/** 获取所有本地工具的 MCPTool 定义列表 */
 export function getLocalTools(): MCPTool[] {
   return LOCAL_TOOLS.map((def) => def.tool)
 }
 
+/** 根据工具名称获取对应的执行器 */
 export function getLocalToolExecutor(toolName: string): LocalToolExecutor | undefined {
   return executorMap.get(toolName)
 }
 
+/** 解析路径：支持 ~ 展开为用户主目录，其余使用 resolve 转为绝对路径 */
 function resolvePath(inputPath: string): string {
   if (inputPath.startsWith('~')) {
     return join(homedir(), inputPath.slice(1))

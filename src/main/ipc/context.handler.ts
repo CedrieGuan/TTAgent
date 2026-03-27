@@ -1,3 +1,7 @@
+/**
+ * 上下文管理 IPC Handler
+ * 处理手动触发的上下文压缩请求
+ */
 import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '@shared/constants/ipc.channels'
 import type { IPCResponse } from '@shared/types/ipc.types'
@@ -17,6 +21,7 @@ interface CompressPayload {
 }
 
 export function registerContextHandlers(): void {
+  /** 手动压缩指定会话的上下文，并将结果持久化 */
   ipcMain.handle(
     IPC_CHANNELS.CONTEXT_COMPRESS,
     async (event, payload: CompressPayload): Promise<IPCResponse> => {
@@ -40,10 +45,12 @@ export function registerContextHandlers(): void {
           tools: []
         })
 
+        // 将上下文事件推送到渲染进程
         for (const evt of ctxResult.events) {
           emitContextEvent(sender, evt)
         }
 
+        // 上报压缩后的预算使用情况
         const budget = calculateBudget(contextWindow, maxTokens, mcpToolsCount > 0)
         const totalTokens = ctxResult.totalTokens
         const usagePercent = Math.round((totalTokens / budget.usableInputBudget) * 100)
@@ -54,14 +61,11 @@ export function registerContextHandlers(): void {
             'context_budget_info',
             sessionId,
             `上下文使用 ${usagePercent}%（${formatTokenCount(totalTokens)} / ${formatTokenCount(budget.usableInputBudget)}）`,
-            {
-              totalTokens,
-              budgetTokens: budget.usableInputBudget,
-              usagePercent
-            }
+            { totalTokens, budgetTokens: budget.usableInputBudget, usagePercent }
           )
         )
 
+        // 若执行了管理策略，将裁剪后的消息写回存储
         if (ctxResult.wasManaged) {
           store.set(`messages.${sessionId}` as never, ctxResult.messages as never)
           emitContextEvent(
@@ -81,6 +85,7 @@ export function registerContextHandlers(): void {
   )
 }
 
+/** 根据提供商和模型名称查找上下文窗口大小，默认 128K */
 function getContextWindow(provider: string, model: string): number {
   const models = PROVIDER_MODELS[provider as keyof typeof PROVIDER_MODELS]
   if (models) {
@@ -90,6 +95,7 @@ function getContextWindow(provider: string, model: string): number {
   return 128000
 }
 
+/** 格式化 token 数为可读字符串 */
 function formatTokenCount(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`

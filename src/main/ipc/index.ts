@@ -1,3 +1,7 @@
+/**
+ * IPC Handler 注册入口
+ * 统一注册所有主进程 IPC 处理器
+ */
 import { registerAIHandlers } from './ai.handler'
 import { registerSessionHandlers } from './session.handler'
 import { registerConfigHandlers } from './config.handler'

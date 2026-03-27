@@ -1,3 +1,8 @@
+/**
+ * MCP 服务器 IPC Handler
+ * 管理 MCP 服务器的连接、断开和工具调用
+ * 使用 StdioClientTransport 通过子进程与 MCP 服务器通信
+ */
 import { ipcMain } from 'electron'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
@@ -6,12 +11,13 @@ import { IPC_CHANNELS } from '@shared/constants/ipc.channels'
 import type { IPCResponse, MCPCallToolPayload, MCPConnectPayload } from '@shared/types/ipc.types'
 import type { MCPServerStatus, MCPTool } from '@shared/types/mcp.types'
 
-// 活跃的 MCP 客户端连接
+/** 活跃的 MCP 客户端连接（服务器名称 -> Client 实例） */
 const mcpClients = new Map<string, Client>()
 
 export { mcpClients }
 
 export function registerMCPHandlers(): void {
+  /** 获取所有已配置服务器的状态（含连接状态） */
   ipcMain.handle(IPC_CHANNELS.MCP_LIST_SERVERS, (): IPCResponse<MCPServerStatus[]> => {
     const servers = store.get('mcpServers') ?? []
     const statuses: MCPServerStatus[] = servers.map((s) => ({
@@ -23,6 +29,7 @@ export function registerMCPHandlers(): void {
     return { success: true, data: statuses }
   })
 
+  /** 获取所有已连接服务器提供的工具列表 */
   ipcMain.handle(IPC_CHANNELS.MCP_LIST_TOOLS, async (): Promise<IPCResponse<MCPTool[]>> => {
     const allTools: MCPTool[] = []
     for (const [, client] of mcpClients) {
@@ -30,16 +37,18 @@ export function registerMCPHandlers(): void {
         const result = await client.listTools()
         allTools.push(...(result.tools as MCPTool[]))
       } catch {
-        // 跳过断开的服务器
+        // 跳过断开的服务器，继续处理其他服务器
       }
     }
     return { success: true, data: allTools }
   })
 
+  /** 连接 MCP 服务器（若已连接则先断开重连），并持久化配置 */
   ipcMain.handle(
     IPC_CHANNELS.MCP_CONNECT_SERVER,
     async (_event, payload: MCPConnectPayload): Promise<IPCResponse> => {
       try {
+        // 若已有同名连接，先关闭
         if (mcpClients.has(payload.name)) {
           await mcpClients.get(payload.name)!.close()
           mcpClients.delete(payload.name)
@@ -55,7 +64,7 @@ export function registerMCPHandlers(): void {
         await client.connect(transport)
         mcpClients.set(payload.name, client)
 
-        // 持久化服务器配置
+        // 持久化服务器配置（更新已有配置或追加新配置）
         const servers = store.get('mcpServers') ?? []
         const existing = servers.findIndex((s) => s.name === payload.name)
         const config = {
@@ -76,6 +85,7 @@ export function registerMCPHandlers(): void {
     }
   )
 
+  /** 断开指定 MCP 服务器的连接 */
   ipcMain.handle(
     IPC_CHANNELS.MCP_DISCONNECT_SERVER,
     async (_event, name: string): Promise<IPCResponse> => {
@@ -89,6 +99,7 @@ export function registerMCPHandlers(): void {
     }
   )
 
+  /** 直接调用指定服务器上的工具（用于调试或手动触发） */
   ipcMain.handle(
     IPC_CHANNELS.MCP_CALL_TOOL,
     async (_event, payload: MCPCallToolPayload): Promise<IPCResponse> => {

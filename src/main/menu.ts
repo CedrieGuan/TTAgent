@@ -1,3 +1,7 @@
+/**
+ * 应用菜单构建模块
+ * 根据平台差异构建原生菜单（macOS 包含 App 菜单，其他平台不含）
+ */
 import { app, Menu, shell, BrowserWindow } from 'electron'
 import { is } from '@electron-toolkit/utils'
 
@@ -5,6 +9,7 @@ export function buildMenu(mainWindow: BrowserWindow): void {
   const isMac = process.platform === 'darwin'
 
   const template: Electron.MenuItemConstructorOptions[] = [
+    // macOS 专属：应用菜单（包含关于、服务、隐藏、退出等系统项）
     ...(isMac
       ? [
           {
@@ -42,6 +47,7 @@ export function buildMenu(mainWindow: BrowserWindow): void {
       submenu: [
         { role: 'reload' },
         { role: 'forceReload' },
+        // 仅开发环境显示 DevTools 菜单项
         ...(is.dev ? [{ role: 'toggleDevTools' as const }] : []),
         { type: 'separator' },
         { role: 'resetZoom' },

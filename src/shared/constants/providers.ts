@@ -1,5 +1,6 @@
 import type { AIProvider, ModelInfo } from '../types/ai.types'
 
+/** 各提供商支持的模型列表 */
 export const PROVIDER_MODELS: Record<AIProvider, ModelInfo[]> = {
   anthropic: [
     {
@@ -102,6 +103,7 @@ export const PROVIDER_MODELS: Record<AIProvider, ModelInfo[]> = {
   custom: []
 }
 
+/** 提供商显示名称映射 */
 export const PROVIDER_LABELS: Record<AIProvider, string> = {
   anthropic: 'Anthropic',
   openai: 'OpenAI',
@@ -110,7 +112,9 @@ export const PROVIDER_LABELS: Record<AIProvider, string> = {
   custom: '自定义'
 }
 
+/** 智谱 AI 的 API 基础地址 */
 export const ZHIPUAI_BASE_URL = 'https://open.bigmodel.cn/api/coding/paas/v4'
 
+/** 默认提供商和模型 */
 export const DEFAULT_PROVIDER: AIProvider = 'zhipuai'
 export const DEFAULT_MODEL = 'glm-5.1'

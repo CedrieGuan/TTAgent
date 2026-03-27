@@ -1,3 +1,7 @@
+/**
+ * IPC 通信频道常量
+ * 主进程与渲染进程之间所有通信频道的统一定义
+ */
 export const IPC_CHANNELS = {
   // AI 对话
   AI_SEND_MESSAGE: 'ai:send-message',
@@ -12,7 +16,7 @@ export const IPC_CHANNELS = {
   SESSION_GET_MESSAGES: 'session:get-messages',
   SESSION_CLEAR_MESSAGES: 'session:clear-messages',
 
-  // 配置
+  // 配置读写
   CONFIG_GET: 'config:get',
   CONFIG_SET: 'config:set',
   CONFIG_GET_ALL: 'config:get-all',
@@ -25,11 +29,11 @@ export const IPC_CHANNELS = {
   MCP_DISCONNECT_SERVER: 'mcp:disconnect-server',
   MCP_LIST_SERVERS: 'mcp:list-servers',
 
-  // Context Strategy
+  // 上下文管理
   CONTEXT_EVENT: 'context:event',
   CONTEXT_COMPRESS: 'context:compress',
 
-  // Agent Skills
+  // Agent 技能
   SKILL_LIST: 'skill:list',
   SKILL_CREATE: 'skill:create',
   SKILL_UPDATE: 'skill:update',

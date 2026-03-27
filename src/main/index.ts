@@ -1,9 +1,13 @@
+/**
+ * Electron 主进程入口
+ * 负责应用生命周期管理、单实例锁定和主窗口创建
+ */
 import { app, BrowserWindow } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { createMainWindow } from './window'
 import { registerAllHandlers } from './ipc'
 
-// 单实例锁定，防止重复启动
+// 单实例锁定：防止用户重复启动多个应用实例
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
@@ -23,6 +27,7 @@ app.whenReady().then(() => {
 
   createMainWindow()
 
+  // macOS：点击 Dock 图标时若无窗口则重新创建
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createMainWindow()
@@ -30,7 +35,7 @@ app.whenReady().then(() => {
   })
 })
 
-// macOS 以外的平台：关闭所有窗口后退出
+// macOS 以外的平台：关闭所有窗口后退出应用
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()

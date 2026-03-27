@@ -1,3 +1,10 @@
+/**
+ * AI 对话 IPC Handler
+ * 核心模块：处理多提供商流式对话、工具调用循环（Agent Loop）和上下文管理
+ *
+ * 支持的提供商：Anthropic、OpenAI、智谱 AI（OpenAI 兼容接口）
+ * Agent Loop 最大迭代次数：15 次
+ */
 import { ipcMain } from 'electron'
 import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
@@ -16,14 +23,19 @@ import { manageContext, applyMidLoopCheck } from '../lib/context-strategy'
 import { emitContextEvent, createEvent } from '../lib/context-events'
 import { countMessagesTokens, calculateBudget } from '../lib/token-counter'
 
+/** 活跃的流式请求 AbortController（sessionId -> controller） */
 const activeStreams = new Map<string, AbortController>()
+
+/** Agent Loop 最大迭代次数，防止无限循环 */
 const MAX_AGENT_ITERATIONS = 15
 
+/** 单次流式调用的返回结果 */
 interface StreamResult {
   fullContent: string
   toolCalls: ParsedToolCall[]
 }
 
+/** 解析后的工具调用 */
 interface ParsedToolCall {
   id: string
   name: string
@@ -31,6 +43,10 @@ interface ParsedToolCall {
 }
 
 export function registerAIHandlers(): void {
+  /**
+   * 主处理器：接收用户消息，执行 Agent Loop
+   * 流程：上下文管理 -> 流式调用 LLM -> 执行工具 -> 循环直到无工具调用
+   */
   ipcMain.handle(
     IPC_CHANNELS.AI_SEND_MESSAGE,
     async (event, payload: AIRequestPayload): Promise<IPCResponse> => {
@@ -48,6 +64,7 @@ export function registerAIHandlers(): void {
       const abortController = new AbortController()
       activeStreams.set(sessionId, abortController)
 
+      // 持久化用户消息
       const lastMessage = messages[messages.length - 1]
       if (lastMessage?.role === 'user') {
         persistMessage(sessionId, lastMessage)
@@ -59,6 +76,7 @@ export function registerAIHandlers(): void {
       try {
         const contextWindow = getContextWindow(provider, model)
 
+        // 初始上下文管理：裁剪历史消息以适应 token 预算
         const ctxResult = manageContext({
           sessionId,
           messages,
@@ -74,9 +92,11 @@ export function registerAIHandlers(): void {
         const agentMessages: ChatMessage[] = [...ctxResult.messages]
         let finalContent = ''
 
+        // Agent Loop：最多迭代 MAX_AGENT_ITERATIONS 次
         for (let iteration = 0; iteration < MAX_AGENT_ITERATIONS; iteration++) {
           if (abortController.signal.aborted) break
 
+          // 非首次迭代：检查工具调用后上下文是否超出预算
           if (iteration > 0) {
             const midCheck = applyMidLoopCheck(
               agentMessages,
@@ -94,6 +114,7 @@ export function registerAIHandlers(): void {
             }
           }
 
+          // 调用 LLM，获取文本内容和工具调用列表
           const result = await streamWithTools({
             sender,
             sessionId,
@@ -109,10 +130,12 @@ export function registerAIHandlers(): void {
 
           finalContent = result.fullContent
 
+          // 无工具调用：对话结束，退出循环
           if (result.toolCalls.length === 0) {
             break
           }
 
+          // 执行所有工具调用
           const toolResults = await executeToolCalls(
             sender,
             sessionId,
@@ -121,6 +144,7 @@ export function registerAIHandlers(): void {
             abortController.signal
           )
 
+          // 将本轮 assistant 消息（含工具调用）追加到历史并持久化
           const assistantMsg: ChatMessage = {
             id: `${Date.now()}-assistant-${iteration}`,
             role: 'assistant',
@@ -137,6 +161,7 @@ export function registerAIHandlers(): void {
           agentMessages.push(assistantMsg)
           persistMessage(sessionId, assistantMsg)
 
+          // 通知渲染进程：本轮 agent 消息已完成（用于 UI 展示工具调用结果）
           const agentMsgChunk: AIStreamChunk = {
             type: 'agent_message',
             sessionId,
@@ -144,12 +169,14 @@ export function registerAIHandlers(): void {
           }
           if (!sender.isDestroyed()) sender.send(IPC_CHANNELS.AI_STREAM_CHUNK, agentMsgChunk)
 
+          // 将工具结果追加到历史（格式因提供商而异）
           const toolResultMsgs = buildToolResultMessages(provider, toolResults)
           for (const trMsg of toolResultMsgs) {
             agentMessages.push(trMsg)
           }
         }
 
+        // 持久化最终的纯文本 assistant 消息（无工具调用的最后一轮）
         if (finalContent) {
           const existingAssistant = agentMessages.filter(
             (m) =>
@@ -169,6 +196,7 @@ export function registerAIHandlers(): void {
           }
         }
 
+        // 上报最终的上下文使用情况
         {
           const budget = calculateBudget(contextWindow, maxTokens, allTools.length > 0)
           const totalTokens = countMessagesTokens(agentMessages)
@@ -195,18 +223,24 @@ export function registerAIHandlers(): void {
         return { success: false, error }
       } finally {
         activeStreams.delete(sessionId)
+        // 无论成功或失败，都发送 stop 信号通知渲染进程流已结束
         const stopChunk: AIStreamChunk = { type: 'stop', sessionId }
         if (!sender.isDestroyed()) sender.send(IPC_CHANNELS.AI_STREAM_CHUNK, stopChunk)
       }
     }
   )
 
+  /** 取消指定会话的流式请求 */
   ipcMain.on(IPC_CHANNELS.AI_CANCEL_STREAM, (_event, sessionId: string) => {
     activeStreams.get(sessionId)?.abort()
     activeStreams.delete(sessionId)
   })
 }
 
+/**
+ * 顺序执行工具调用列表
+ * 每次调用前后都向渲染进程发送状态更新
+ */
 async function executeToolCalls(
   sender: Electron.WebContents,
   sessionId: string,
@@ -219,6 +253,7 @@ async function executeToolCalls(
   for (const tc of toolCalls) {
     if (signal.aborted) break
 
+    // 通知渲染进程：工具调用开始
     const startChunk: AIStreamChunk = {
       type: 'tool_use_start',
       sessionId,
@@ -230,6 +265,7 @@ async function executeToolCalls(
 
     const result = await toolRouter.executeTool(tc.name, tc.input)
 
+    // 通知渲染进程：工具调用结果
     const resultChunk: AIStreamChunk = {
       type: 'tool_result',
       sessionId,
@@ -246,6 +282,10 @@ async function executeToolCalls(
   return results
 }
 
+/**
+ * 构建工具结果消息
+ * Anthropic 使用 user 角色包含 tool_result 块；OpenAI 使用独立的 tool 角色消息
+ */
 function buildToolResultMessages(
   provider: string,
   results: { id: string; output: string; isError: boolean }[]
@@ -269,6 +309,7 @@ function buildToolResultMessages(
     ]
   }
 
+  // OpenAI / 智谱 AI：每个工具结果对应一条 tool 角色消息
   return results.map((r) => ({
     id: `${Date.now()}-tool-result-${r.id}`,
     role: 'tool' as const,
@@ -279,6 +320,9 @@ function buildToolResultMessages(
   })) as ChatMessage[]
 }
 
+/**
+ * 根据提供商路由到对应的流式调用实现
+ */
 async function streamWithTools(opts: {
   sender: Electron.WebContents
   sessionId: string
@@ -293,6 +337,7 @@ async function streamWithTools(opts: {
 }): Promise<StreamResult> {
   const { provider } = opts
 
+  // 合并本地工具和 MCP 工具
   const mergedTools = opts.toolRouter.mergeTools(opts.allTools)
 
   if (provider === 'anthropic') {
@@ -308,8 +353,12 @@ async function streamWithTools(opts: {
   throw new Error(`Provider "${provider}" not yet supported`)
 }
 
-// ── Anthropic ─────────────────────────────────────────────
+// ── Anthropic ─────────────────────────────────────────────────
 
+/**
+ * 构建 Anthropic 消息内容
+ * 支持纯文本和多模态（图片 + 文件附件）
+ */
 function buildAnthropicContent(
   text: string,
   attachments?: Attachment[]
@@ -342,6 +391,10 @@ function buildAnthropicContent(
   return parts
 }
 
+/**
+ * 将 ChatMessage[] 转换为 Anthropic MessageParam[]
+ * 处理工具调用、工具结果和多模态内容
+ */
 function buildAnthropicMessages(messages: ChatMessage[]): Anthropic.MessageParam[] {
   const result: Anthropic.MessageParam[] = []
 
@@ -351,6 +404,7 @@ function buildAnthropicMessages(messages: ChatMessage[]): Anthropic.MessageParam
     if (m.role === 'user') {
       const anthropicMsg = m as ChatMessage & { _anthropicToolResults?: unknown }
       if (anthropicMsg._anthropicToolResults) {
+        // 工具结果消息：转换为 tool_result 块
         const toolResults = anthropicMsg._anthropicToolResults as {
           id: string
           output: string
@@ -402,6 +456,7 @@ function buildAnthropicMessages(messages: ChatMessage[]): Anthropic.MessageParam
   return result
 }
 
+/** Anthropic 流式调用实现，支持工具调用解析 */
 async function streamAnthropicWithTools(
   opts: {
     sender: Electron.WebContents
@@ -446,11 +501,8 @@ async function streamAnthropicWithTools(
     if (event.type === 'content_block_start') {
       const block = event.content_block as Anthropic.ContentBlock
       if (block.type === 'tool_use') {
-        currentToolCall = {
-          id: block.id,
-          name: block.name,
-          inputJson: ''
-        }
+        // 开始接收工具调用
+        currentToolCall = { id: block.id, name: block.name, inputJson: '' }
       }
     }
 
@@ -462,24 +514,18 @@ async function streamAnthropicWithTools(
         if (!sender.isDestroyed()) sender.send(IPC_CHANNELS.AI_STREAM_CHUNK, chunk)
       }
       if (event.delta.type === 'input_json_delta' && currentToolCall) {
+        // 累积工具调用的 JSON 参数
         currentToolCall.inputJson += event.delta.partial_json
       }
     }
 
     if (event.type === 'content_block_stop' && currentToolCall) {
+      // 工具调用参数接收完毕，解析 JSON
       try {
         const input = JSON.parse(currentToolCall.inputJson || '{}')
-        toolCalls.push({
-          id: currentToolCall.id,
-          name: currentToolCall.name,
-          input
-        })
+        toolCalls.push({ id: currentToolCall.id, name: currentToolCall.name, input })
       } catch {
-        toolCalls.push({
-          id: currentToolCall.id,
-          name: currentToolCall.name,
-          input: {}
-        })
+        toolCalls.push({ id: currentToolCall.id, name: currentToolCall.name, input: {} })
       }
       currentToolCall = null
     }
@@ -488,8 +534,12 @@ async function streamAnthropicWithTools(
   return { fullContent, toolCalls }
 }
 
-// ── OpenAI / 智谱 ────────────────────────────────────────
+// ── OpenAI / 智谱 AI ──────────────────────────────────────────
 
+/**
+ * 构建 OpenAI 消息内容
+ * 支持纯文本和多模态（图片 URL + 文件文本）
+ */
 function buildOpenAIContent(
   text: string,
   attachments?: Attachment[]
@@ -521,6 +571,10 @@ function buildOpenAIContent(
   return parts
 }
 
+/**
+ * 将 ChatMessage[] 转换为 OpenAI ChatCompletionMessageParam[]
+ * 处理工具调用和工具结果消息
+ */
 function buildOpenAIMessages(messages: ChatMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
   const result: OpenAI.Chat.ChatCompletionMessageParam[] = []
 
@@ -568,6 +622,7 @@ function buildOpenAIMessages(messages: ChatMessage[]): OpenAI.Chat.ChatCompletio
   return result
 }
 
+/** OpenAI 流式调用实现 */
 async function streamOpenAIWithTools(
   opts: {
     sender: Electron.WebContents
@@ -585,10 +640,7 @@ async function streamOpenAIWithTools(
   const config = providers['openai']
   if (!config?.apiKey) throw new Error('OpenAI API Key 未配置')
 
-  const client = new OpenAI({
-    apiKey: config.apiKey,
-    baseURL: config.baseUrl
-  })
+  const client = new OpenAI({ apiKey: config.apiKey, baseURL: config.baseUrl })
 
   const openaiMessages = systemPrompt
     ? [{ role: 'system' as const, content: systemPrompt }, ...buildOpenAIMessages(messages)]
@@ -608,6 +660,7 @@ async function streamOpenAIWithTools(
   return streamOpenAICompatible(client, createParams, sender, sessionId, signal)
 }
 
+/** 智谱 AI 流式调用实现（使用 OpenAI 兼容接口） */
 async function streamZhipuAIWithTools(
   opts: {
     sender: Electron.WebContents
@@ -625,10 +678,7 @@ async function streamZhipuAIWithTools(
   const config = providers['zhipuai']
   if (!config?.apiKey) throw new Error('智谱 AI API Key 未配置')
 
-  const client = new OpenAI({
-    apiKey: config.apiKey,
-    baseURL: ZHIPUAI_BASE_URL
-  })
+  const client = new OpenAI({ apiKey: config.apiKey, baseURL: ZHIPUAI_BASE_URL })
 
   const zhipuMessages = systemPrompt
     ? [{ role: 'system' as const, content: systemPrompt }, ...buildOpenAIMessages(messages)]
@@ -648,6 +698,10 @@ async function streamZhipuAIWithTools(
   return streamOpenAICompatible(client, createParams, sender, sessionId, signal)
 }
 
+/**
+ * OpenAI 兼容接口的通用流式调用实现
+ * 同时处理文本增量和工具调用参数的流式拼接
+ */
 async function streamOpenAICompatible(
   client: OpenAI,
   params: OpenAI.Chat.ChatCompletionCreateParamsStreaming,
@@ -656,6 +710,7 @@ async function streamOpenAICompatible(
   signal: AbortSignal
 ): Promise<StreamResult> {
   let fullContent = ''
+  // 使用 index 作为 key，因为流式工具调用按 index 分片
   const toolCallsMap = new Map<number, { id: string; name: string; argsJson: string }>()
 
   const stream = await client.chat.completions.create(params, { signal })
@@ -690,8 +745,9 @@ async function streamOpenAICompatible(
     }
   }
 
+  // 将累积的工具调用参数解析为 JSON
   const toolCalls: ParsedToolCall[] = []
-  for (const [_, entry] of toolCallsMap) {
+  for (const [, entry] of toolCallsMap) {
     try {
       const input = JSON.parse(entry.argsJson || '{}')
       toolCalls.push({ id: entry.id, name: entry.name, input })
@@ -703,6 +759,7 @@ async function streamOpenAICompatible(
   return { fullContent, toolCalls }
 }
 
+/** 根据提供商和模型名称查找上下文窗口大小，默认 128K */
 function getContextWindow(provider: string, model: string): number {
   const models = PROVIDER_MODELS[provider as keyof typeof PROVIDER_MODELS]
   if (models) {
@@ -712,6 +769,7 @@ function getContextWindow(provider: string, model: string): number {
   return 128000
 }
 
+/** 格式化 token 数为可读字符串（K/M 单位） */
 function fmtTk(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`

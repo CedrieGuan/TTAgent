@@ -1,54 +1,57 @@
 import type { ChatMessage } from './ai.types'
 
-// ── Token Budget ─────────────────────────────────────────────
+// ── Token 预算 ────────────────────────────────────────────────
 
+/** 上下文 Token 预算分配明细 */
 export interface TokenBudget {
-  /** Total context window for the model */
+  /** 模型总上下文窗口大小 */
   totalContextWindow: number
-  /** Tokens reserved for model response */
+  /** 为模型响应预留的 token 数 */
   responseReserve: number
-  /** Safety margin for counting inaccuracies */
+  /** 计数误差安全边距 */
   safetyMargin: number
-  /** Headroom for agent-loop tool chain growth */
+  /** Agent 循环工具链增长预留空间 */
   agentLoopHeadroom: number
-  /** Computed: tokens available for input (prompt + history + tools) */
+  /** 可用于输入的 token 预算（提示 + 历史 + 工具定义） */
   usableInputBudget: number
 }
 
-// ── Conversation Turns ───────────────────────────────────────
+// ── 对话轮次 ──────────────────────────────────────────────────
 
+/** 一个完整的对话轮次（用户消息 + 对应的 AI 回复 + 工具调用链） */
 export interface ConversationTurn {
-  /** Unique ID derived from first message in the turn */
+  /** 由轮次首条消息 ID 派生的唯一标识 */
   id: string
-  /** Index range in original flat ChatMessage[] */
+  /** 在原始 ChatMessage[] 中的起始索引 */
   startIndex: number
   endIndex: number
-  /** Messages belonging to this turn (references to original array) */
+  /** 属于本轮次的消息列表（引用原始数组） */
   messages: ChatMessage[]
-  /** Whether this turn contains tool call/result chains */
+  /** 本轮次是否包含工具调用链 */
   hasToolChain: boolean
-  /** Estimated token count for this turn */
+  /** 本轮次的估算 token 数 */
   tokenEstimate: number
-  /** True if this is the most recent (active) turn */
+  /** 是否为最新（当前）轮次 */
   isCurrentTurn: boolean
 }
 
-// ── Context Strategy Config ──────────────────────────────────
+// ── 上下文策略配置 ────────────────────────────────────────────
 
+/** 上下文管理策略配置项 */
 export interface ContextStrategyConfig {
-  /** Enable/disable context management (default: true) */
+  /** 是否启用上下文管理（默认 true） */
   enabled: boolean
-  /** Soft threshold ratio to start managing (default: 0.75) */
+  /** 开始管理的软阈值比例（默认 0.75） */
   softThreshold: number
-  /** Hard threshold ratio where management is mandatory (default: 0.90) */
+  /** 强制管理的硬阈值比例（默认 0.90） */
   hardThreshold: number
-  /** Max tokens for a single message before offloading (default: 8000) */
+  /** 单条消息触发卸载的 token 上限（默认 8000） */
   offloadThreshold: number
-  /** Max tokens for the summary message (default: 15000) */
+  /** 摘要消息的最大 token 数（默认 15000） */
   maxSummaryTokens: number
-  /** Model to use for summarization (auto-resolved to cheapest) */
+  /** 摘要使用的模型（自动解析为最便宜的可用模型） */
   summaryModel?: string
-  /** Summary provider (auto-resolved to cheapest available) */
+  /** 摘要使用的提供商（自动解析） */
   summaryProvider?: string
 }
 
@@ -60,24 +63,26 @@ export const DEFAULT_CONTEXT_STRATEGY_CONFIG: ContextStrategyConfig = {
   maxSummaryTokens: 15000
 }
 
-// ── Context Events ───────────────────────────────────────────
+// ── 上下文事件 ────────────────────────────────────────────────
 
+/** 上下文管理事件类型 */
 export type ContextEventType =
-  | 'context_warning' // Approaching limit
-  | 'context_offloaded' // Long message offloaded
-  | 'context_truncated' // Old turns removed
-  | 'context_summary_started' // Summarization in progress
-  | 'context_summary_completed' // Summary created
-  | 'context_summary_failed' // Summarization failed, fell back to truncation
-  | 'context_budget_info' // Token budget info for UI
+  | 'context_warning'           // 接近上下文限制
+  | 'context_offloaded'         // 长消息已卸载
+  | 'context_truncated'         // 旧轮次已截断
+  | 'context_summary_started'   // 摘要生成中
+  | 'context_summary_completed' // 摘要生成完成
+  | 'context_summary_failed'    // 摘要失败，回退到截断
+  | 'context_budget_info'       // Token 预算信息（用于 UI 展示）
 
+/** 上下文管理事件（通过 IPC 推送到渲染进程） */
 export interface ContextEvent {
   type: ContextEventType
   sessionId: string
   timestamp: number
-  /** Human-readable description (for UI display) */
+  /** 人类可读的描述（用于 UI 展示） */
   message: string
-  /** Numeric data payload (token counts, percentages, etc.) */
+  /** 数值数据载荷（token 数、百分比等） */
   data?: {
     totalTokens?: number
     budgetTokens?: number
@@ -89,17 +94,18 @@ export interface ContextEvent {
   }
 }
 
-// ── Strategy Result ──────────────────────────────────────────
+// ── 策略执行结果 ──────────────────────────────────────────────
 
+/** 上下文管理器的执行结果 */
 export interface ContextManagerResult {
-  /** Trimmed message array (safe to send to LLM) */
+  /** 经过裁剪后可安全发送给 LLM 的消息列表 */
   messages: ChatMessage[]
-  /** Events emitted during strategy execution */
+  /** 策略执行过程中产生的事件列表 */
   events: ContextEvent[]
-  /** Token budget breakdown */
+  /** Token 预算分配明细 */
   budget: TokenBudget
-  /** Total estimated tokens of the result */
+  /** 结果消息列表的估算总 token 数 */
   totalTokens: number
-  /** Whether any strategy was applied */
+  /** 是否执行了任何上下文管理策略 */
   wasManaged: boolean
 }
