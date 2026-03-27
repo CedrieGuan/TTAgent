@@ -1,21 +1,28 @@
 import React, { useEffect, useRef } from 'react'
-import type { ChatMessage } from '@shared/types/ai.types'
+import type { ChatMessage, MCPToolCall } from '@shared/types/ai.types'
 import { MessageBubble, StreamingBubble } from './MessageBubble'
+import { ToolCallDisplay } from './ToolCallDisplay'
 
 interface MessageListProps {
   messages: ChatMessage[]
   isThinking: boolean
   isStreaming: boolean
   streamingContent: string
+  streamingToolCalls: MCPToolCall[]
 }
 
-export function MessageList({ messages, isThinking, isStreaming, streamingContent }: MessageListProps) {
+export function MessageList({
+  messages,
+  isThinking,
+  isStreaming,
+  streamingContent,
+  streamingToolCalls
+}: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  // 自动滚动到底部
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length, streamingContent, isThinking])
+  }, [messages.length, streamingContent, isThinking, streamingToolCalls.length])
 
   if (messages.length === 0 && !isStreaming && !isThinking) {
     return (
@@ -33,6 +40,11 @@ export function MessageList({ messages, isThinking, isStreaming, streamingConten
       {messages.map((msg) => (
         <MessageBubble key={msg.id} message={msg} />
       ))}
+
+      {streamingToolCalls.map((tc) => (
+        <ToolCallDisplay key={tc.id} toolCall={tc} />
+      ))}
+
       {(isThinking || isStreaming) && (
         <StreamingBubble content={streamingContent} isThinking={isThinking} />
       )}

@@ -259,7 +259,7 @@ export function InputArea({ onSend, onCancel, isStreaming, isThinking, disabled 
           placeholder={isRecording ? '正在录音...' : '发送消息...'}
           disabled={disabled}
           rows={1}
-          className="flex-1 resize-none bg-transparent text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] outline-none leading-relaxed max-h-[200px] no-drag"
+          className="flex-1 resize-none bg-transparent text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] outline-none leading-relaxed max-h-[200px] no-drag my-auto"
           style={{ minHeight: '24px' }}
         />
 

@@ -16,8 +16,8 @@ export function HistoryPage({ onNavigateToChat }: HistoryPageProps) {
   }
 
   return (
-    <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="max-w-2xl w-full mx-auto p-8 space-y-6">
+    <div className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden">
+      <div className="max-w-2xl w-full mx-auto p-8 space-y-6 min-w-0 overflow-hidden">
         <h1 className="text-xl font-semibold text-[var(--color-text-primary)]">历史记录</h1>
 
         {sessions.length === 0 && (
@@ -28,15 +28,15 @@ export function HistoryPage({ onNavigateToChat }: HistoryPageProps) {
           {sessions.map((session) => (
             <div
               key={session.id}
-              className="group flex items-center gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-3 hover:border-[var(--color-accent)]/40 transition-colors cursor-pointer"
+              className="group flex items-center gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-3 hover:border-[var(--color-accent)]/40 transition-colors cursor-pointer overflow-hidden"
               onClick={() => handleOpen(session.id)}
             >
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 overflow-hidden">
                 <p className="text-sm font-medium text-[var(--color-text-primary)] truncate">
                   {session.title}
                 </p>
                 {session.lastMessage && (
-                  <p className="text-xs text-[var(--color-text-muted)] truncate mt-0.5">
+                  <p className="text-xs text-[var(--color-text-muted)] mt-0.5 truncate">
                     {session.lastMessage}
                   </p>
                 )}

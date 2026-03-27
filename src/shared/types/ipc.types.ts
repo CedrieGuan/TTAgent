@@ -21,7 +21,13 @@ export interface AIRequestPayload {
 }
 
 // AI 流式块
-export type AIStreamChunkType = 'text_delta' | 'tool_use_start' | 'tool_use_delta' | 'stop' | 'error'
+export type AIStreamChunkType =
+  | 'text_delta'
+  | 'tool_use_start'
+  | 'tool_use_delta'
+  | 'tool_result'
+  | 'stop'
+  | 'error'
 
 export interface AIStreamChunk {
   type: AIStreamChunkType
@@ -30,6 +36,10 @@ export interface AIStreamChunk {
   toolCallId?: string
   toolName?: string
   toolInput?: Record<string, unknown>
+  /** tool_result 专用：工具执行输出 */
+  toolOutput?: string
+  /** tool_result 专用：工具执行是否出错 */
+  toolIsError?: boolean
   error?: string
 }
 

@@ -30,7 +30,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
       </div>
 
       {/* 会话列表 */}
-      <div className="flex-1 overflow-y-auto px-2 pb-2">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 pb-2">
         {sessions.length === 0 && (
           <p className="px-2 py-4 text-center text-xs text-[var(--color-text-muted)]">
             暂无对话，点击上方创建
@@ -39,7 +39,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
         {sessions.map((session) => (
           <button
             key={session.id}
-            className={`no-drag group mb-0.5 flex w-full flex-col gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors duration-100
+            className={`no-drag group mb-0.5 flex w-full flex-col gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors duration-100 overflow-hidden
               ${currentSessionId === session.id && currentPage === 'chat'
                 ? 'bg-[var(--color-accent-subtle)] text-[var(--color-text-primary)]'
                 : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)]'
@@ -50,7 +50,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
             }}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="truncate text-sm font-medium">
+              <span className="min-w-0 truncate text-sm font-medium">
                 {truncate(session.title, 24)}
               </span>
               <button
@@ -65,7 +65,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
               </button>
             </div>
             {session.lastMessage && (
-              <span className="truncate text-xs text-[var(--color-text-muted)]">
+              <span className="w-full truncate text-xs text-[var(--color-text-muted)]">
                 {truncate(session.lastMessage, 36)}
               </span>
             )}

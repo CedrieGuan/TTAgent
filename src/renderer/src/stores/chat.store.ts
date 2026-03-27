@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
-import type { ChatMessage } from '@shared/types/ai.types'
+import type { ChatMessage, MCPToolCall } from '@shared/types/ai.types'
 
 interface ChatState {
   messagesBySession: Record<string, ChatMessage[]>
@@ -8,20 +8,20 @@ interface ChatState {
   isStreaming: boolean
   streamingContent: string
   streamingSessionId: string | null
+  streamingToolCalls: MCPToolCall[]
 
-  // 获取当前会话消息
   getMessages: (sessionId: string) => ChatMessage[]
-  // 从持久化加载消息
   loadMessages: (sessionId: string) => Promise<void>
-  // 添加用户消息（发送前乐观更新）
   addMessage: (sessionId: string, msg: ChatMessage) => void
-  // 开始思考（消息已发送，等待第一个流块）
   startThinking: (sessionId: string) => void
-  // 流式追加文本
   appendStreamChunk: (sessionId: string, text: string) => void
-  // 流结束，将 streamingContent 写入 messages
+  addStreamingToolCall: (sessionId: string, toolCall: MCPToolCall) => void
+  updateStreamingToolCall: (
+    sessionId: string,
+    toolCallId: string,
+    updates: Partial<MCPToolCall>
+  ) => void
   finalizeStream: (sessionId: string) => void
-  // 清空会话消息
   clearMessages: (sessionId: string) => Promise<void>
 }
 
@@ -32,6 +32,7 @@ export const useChatStore = create<ChatState>()(
     isStreaming: false,
     streamingContent: '',
     streamingSessionId: null,
+    streamingToolCalls: [],
 
     getMessages: (sessionId) => get().messagesBySession[sessionId] ?? [],
 
@@ -58,6 +59,7 @@ export const useChatStore = create<ChatState>()(
         state.isStreaming = false
         state.streamingContent = ''
         state.streamingSessionId = sessionId
+        state.streamingToolCalls = []
       }),
 
     appendStreamChunk: (sessionId, text) =>
@@ -68,23 +70,43 @@ export const useChatStore = create<ChatState>()(
         state.streamingContent += text
       }),
 
+    addStreamingToolCall: (sessionId, toolCall) =>
+      set((state) => {
+        if (state.streamingSessionId !== sessionId) return
+        state.streamingToolCalls.push(toolCall)
+      }),
+
+    updateStreamingToolCall: (sessionId, toolCallId, updates) =>
+      set((state) => {
+        if (state.streamingSessionId !== sessionId) return
+        const idx = state.streamingToolCalls.findIndex((tc) => tc.id === toolCallId)
+        if (idx !== -1) {
+          Object.assign(state.streamingToolCalls[idx], updates)
+        }
+      }),
+
     finalizeStream: (sessionId) =>
       set((state) => {
-        if (state.streamingContent && state.streamingSessionId === sessionId) {
-          if (!state.messagesBySession[sessionId]) {
-            state.messagesBySession[sessionId] = []
+        if (state.streamingSessionId === sessionId) {
+          if (state.streamingContent || state.streamingToolCalls.length > 0) {
+            if (!state.messagesBySession[sessionId]) {
+              state.messagesBySession[sessionId] = []
+            }
+            state.messagesBySession[sessionId].push({
+              id: `${Date.now()}-assistant`,
+              role: 'assistant',
+              content: state.streamingContent,
+              toolCalls:
+                state.streamingToolCalls.length > 0 ? [...state.streamingToolCalls] : undefined,
+              timestamp: Date.now()
+            })
           }
-          state.messagesBySession[sessionId].push({
-            id: `${Date.now()}-assistant`,
-            role: 'assistant',
-            content: state.streamingContent,
-            timestamp: Date.now()
-          })
         }
         state.isThinking = false
         state.streamingContent = ''
         state.streamingSessionId = null
         state.isStreaming = false
+        state.streamingToolCalls = []
       }),
 
     clearMessages: async (sessionId) => {

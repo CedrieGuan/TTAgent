@@ -17,6 +17,9 @@ desktop.ini
 *.log
 npm-debug.log*
 
+# TypeScript 增量编译缓存
+*.tsbuildinfo
+
 # 编辑器本地配置（个人偏好，不强制共享）
 .vscode/
 .idea/

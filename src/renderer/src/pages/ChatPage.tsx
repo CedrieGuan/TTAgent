@@ -8,7 +8,15 @@ import { PROVIDER_MODELS, PROVIDER_LABELS } from '@shared/constants/providers'
 import type { AIProvider } from '@shared/types/ai.types'
 
 export function ChatPage() {
-  const { messages, isThinking, isStreaming, streamingContent, sendMessage, cancelStream } = useChat()
+  const {
+    messages,
+    isThinking,
+    isStreaming,
+    streamingContent,
+    streamingToolCalls,
+    sendMessage,
+    cancelStream
+  } = useChat()
   const { loadMessages } = useChatStore()
   const { currentSessionId, getCurrentSession, updateModel } = useSessionStore()
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
@@ -52,7 +60,8 @@ export function ChatPage() {
 
   // 当前选中模型的显示名
   const currentModelName = session
-    ? PROVIDER_MODELS[session.provider]?.find((m) => m.id === session.model)?.name ?? session.model
+    ? (PROVIDER_MODELS[session.provider]?.find((m) => m.id === session.model)?.name ??
+      session.model)
     : ''
 
   return (
@@ -89,9 +98,10 @@ export function ChatPage() {
                           key={model.id}
                           onClick={() => handleModelSelect(provider, model.id)}
                           className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors
-                            ${isActive
-                              ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]'
-                              : 'text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-2)]'
+                            ${
+                              isActive
+                                ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]'
+                                : 'text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-2)]'
                             }`}
                         >
                           <span>{model.name}</span>
@@ -119,6 +129,7 @@ export function ChatPage() {
         isThinking={isThinking}
         isStreaming={isStreaming}
         streamingContent={streamingContent}
+        streamingToolCalls={streamingToolCalls}
       />
 
       {/* 输入区域 */}
@@ -133,13 +144,27 @@ export function ChatPage() {
 }
 
 const ChevronDownIcon = () => (
-  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+  <svg
+    width="11"
+    height="11"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+  >
     <polyline points="6 9 12 15 18 9" />
   </svg>
 )
 
 const CheckIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+  <svg
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.5"
+  >
     <polyline points="20 6 9 17 4 12" />
   </svg>
 )

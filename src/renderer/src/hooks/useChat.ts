@@ -16,6 +16,7 @@ export function useChat() {
     isStreaming,
     streamingContent,
     streamingSessionId,
+    streamingToolCalls,
     startThinking
   } = useChatStore()
   const { currentSessionId, getCurrentSession } = useSessionStore()
@@ -68,7 +69,7 @@ export function useChat() {
           session.systemPrompt ?? agentSystemPrompt,
           getEnabledSkills()
         ),
-        mcpTools: toolsEnabled && allTools.length > 0 ? allTools : undefined
+        mcpTools: toolsEnabled ? allTools : undefined
       }
 
       await window.api.sendMessage(payload)
@@ -100,6 +101,7 @@ export function useChat() {
     isThinking: currentIsThinking,
     isStreaming: currentIsStreaming,
     streamingContent: currentStreamingContent,
+    streamingToolCalls: isActiveSession ? streamingToolCalls : [],
     sendMessage,
     cancelStream
   }

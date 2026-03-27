@@ -1,13 +1,11 @@
 import { useEffect } from 'react'
 import { useChatStore } from '@stores/chat.store'
 import type { AIStreamChunk } from '@shared/types/ipc.types'
+import type { MCPToolCall } from '@shared/types/ai.types'
 
-/**
- * 全局注册流式事件监听器。
- * 只在 App 根组件挂载一次，组件卸载时自动清理。
- */
 export function useStream(): void {
-  const { appendStreamChunk, finalizeStream } = useChatStore()
+  const { appendStreamChunk, finalizeStream, addStreamingToolCall, updateStreamingToolCall } =
+    useChatStore()
 
   useEffect(() => {
     const cleanup = window.api.onStreamChunk((chunk: AIStreamChunk) => {
@@ -17,11 +15,34 @@ export function useStream(): void {
             appendStreamChunk(chunk.sessionId, chunk.content)
           }
           break
+
+        case 'tool_use_start':
+          if (chunk.sessionId && chunk.toolCallId && chunk.toolName) {
+            const toolCall: MCPToolCall = {
+              id: chunk.toolCallId,
+              name: chunk.toolName,
+              input: chunk.toolInput ?? {},
+              status: 'running'
+            }
+            addStreamingToolCall(chunk.sessionId, toolCall)
+          }
+          break
+
+        case 'tool_result':
+          if (chunk.sessionId && chunk.toolCallId) {
+            updateStreamingToolCall(chunk.sessionId, chunk.toolCallId, {
+              status: chunk.toolIsError ? 'error' : 'success',
+              result: chunk.toolOutput
+            })
+          }
+          break
+
         case 'stop':
           if (chunk.sessionId) {
             finalizeStream(chunk.sessionId)
           }
           break
+
         case 'error':
           if (chunk.sessionId) {
             finalizeStream(chunk.sessionId)
@@ -32,5 +53,5 @@ export function useStream(): void {
     })
 
     return cleanup
-  }, [appendStreamChunk, finalizeStream])
+  }, [appendStreamChunk, finalizeStream, addStreamingToolCall, updateStreamingToolCall])
 }

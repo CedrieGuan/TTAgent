@@ -1,6 +1,7 @@
 import React from 'react'
 import type { ChatMessage, Attachment } from '@shared/types/ai.types'
 import { formatTime } from '@lib/utils'
+import { ToolCallDisplay } from './ToolCallDisplay'
 
 interface MessageBubbleProps {
   message: ChatMessage
@@ -14,9 +15,10 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       {/* 头像 */}
       <div
         className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold
-          ${isUser
-            ? 'bg-[var(--color-accent)] text-white'
-            : 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
+          ${
+            isUser
+              ? 'bg-[var(--color-accent)] text-white'
+              : 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-secondary)] border border-[var(--color-border)]'
           }`}
       >
         {isUser ? 'U' : 'AI'}
@@ -37,13 +39,23 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         {message.content && (
           <div
             className={`rounded-xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words
-              ${isUser
-                ? 'bg-[var(--color-accent)] text-white rounded-tr-sm'
-                : 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-tl-sm'
+              ${
+                isUser
+                  ? 'bg-[var(--color-accent)] text-white rounded-tr-sm'
+                  : 'bg-[var(--color-bg-surface-2)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-tl-sm'
               }
               ${message.isError ? 'border-[var(--color-error)] text-[var(--color-error)]' : ''}`}
           >
             {message.content}
+          </div>
+        )}
+
+        {/* 工具调用 */}
+        {message.toolCalls && message.toolCalls.length > 0 && (
+          <div className="flex flex-col gap-1">
+            {message.toolCalls.map((tc) => (
+              <ToolCallDisplay key={tc.id} toolCall={tc} />
+            ))}
           </div>
         )}
 

@@ -9,6 +9,8 @@ import type { MCPServerStatus, MCPTool } from '@shared/types/mcp.types'
 // 活跃的 MCP 客户端连接
 const mcpClients = new Map<string, Client>()
 
+export { mcpClients }
+
 export function registerMCPHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.MCP_LIST_SERVERS, (): IPCResponse<MCPServerStatus[]> => {
     const servers = store.get('mcpServers') ?? []
@@ -56,7 +58,13 @@ export function registerMCPHandlers(): void {
         // 持久化服务器配置
         const servers = store.get('mcpServers') ?? []
         const existing = servers.findIndex((s) => s.name === payload.name)
-        const config = { name: payload.name, command: payload.command, args: payload.args, env: payload.env, enabled: true }
+        const config = {
+          name: payload.name,
+          command: payload.command,
+          args: payload.args,
+          env: payload.env,
+          enabled: true
+        }
         if (existing >= 0) servers[existing] = config
         else servers.push(config)
         store.set('mcpServers', servers)
@@ -85,7 +93,8 @@ export function registerMCPHandlers(): void {
     IPC_CHANNELS.MCP_CALL_TOOL,
     async (_event, payload: MCPCallToolPayload): Promise<IPCResponse> => {
       const client = mcpClients.get(payload.serverName)
-      if (!client) return { success: false, error: `MCP server "${payload.serverName}" not connected` }
+      if (!client)
+        return { success: false, error: `MCP server "${payload.serverName}" not connected` }
       try {
         const result = await client.callTool({ name: payload.name, arguments: payload.args })
         return { success: true, data: result }
