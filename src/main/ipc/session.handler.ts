@@ -48,6 +48,8 @@ export function registerSessionHandlers(): void {
         ...sessions[idx],
         ...(payload.title !== undefined && { title: payload.title }),
         ...(payload.systemPrompt !== undefined && { systemPrompt: payload.systemPrompt }),
+        ...(payload.model !== undefined && { model: payload.model }),
+        ...(payload.provider !== undefined && { provider: payload.provider }),
         updatedAt: Date.now()
       }
       sessions[idx] = updated

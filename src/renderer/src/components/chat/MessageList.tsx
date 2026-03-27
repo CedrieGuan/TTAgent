@@ -4,19 +4,20 @@ import { MessageBubble, StreamingBubble } from './MessageBubble'
 
 interface MessageListProps {
   messages: ChatMessage[]
+  isThinking: boolean
   isStreaming: boolean
   streamingContent: string
 }
 
-export function MessageList({ messages, isStreaming, streamingContent }: MessageListProps) {
+export function MessageList({ messages, isThinking, isStreaming, streamingContent }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   // 自动滚动到底部
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length, streamingContent])
+  }, [messages.length, streamingContent, isThinking])
 
-  if (messages.length === 0 && !isStreaming) {
+  if (messages.length === 0 && !isStreaming && !isThinking) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <div className="text-center space-y-2">
@@ -32,7 +33,9 @@ export function MessageList({ messages, isStreaming, streamingContent }: Message
       {messages.map((msg) => (
         <MessageBubble key={msg.id} message={msg} />
       ))}
-      {isStreaming && <StreamingBubble content={streamingContent} />}
+      {(isThinking || isStreaming) && (
+        <StreamingBubble content={streamingContent} isThinking={isThinking} />
+      )}
       <div ref={bottomRef} />
     </div>
   )

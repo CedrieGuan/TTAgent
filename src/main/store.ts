@@ -31,7 +31,7 @@ const store = new Store<StoreSchema>({
       zhipuai: {
         provider: 'zhipuai',
         apiKey: '',
-        defaultModel: 'glm-4-plus'
+        defaultModel: DEFAULT_MODEL
       }
     },
     settings: {

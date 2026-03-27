@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { Session } from '@shared/types/session.types'
+import type { AIProvider } from '@shared/types/ai.types'
 
 interface SessionState {
   sessions: Session[]
@@ -10,6 +11,7 @@ interface SessionState {
   createSession: (title?: string) => Promise<Session | null>
   deleteSession: (id: string) => Promise<void>
   renameSession: (id: string, title: string) => Promise<void>
+  updateModel: (id: string, provider: AIProvider, model: string) => Promise<void>
   selectSession: (id: string) => void
   getCurrentSession: () => Session | undefined
 }
@@ -56,6 +58,15 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   renameSession: async (id, title) => {
     const res = await window.api.updateSession({ id, title })
+    if (res.success && res.data) {
+      set((state) => ({
+        sessions: state.sessions.map((s) => (s.id === id ? res.data! : s))
+      }))
+    }
+  },
+
+  updateModel: async (id, provider, model) => {
+    const res = await window.api.updateSession({ id, provider, model })
     if (res.success && res.data) {
       set((state) => ({
         sessions: state.sessions.map((s) => (s.id === id ? res.data! : s))

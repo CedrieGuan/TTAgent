@@ -43,6 +43,8 @@ export interface UpdateSessionPayload {
   id: string
   title?: string
   systemPrompt?: string
+  model?: string
+  provider?: AIProvider
 }
 
 // MCP 工具调用载荷

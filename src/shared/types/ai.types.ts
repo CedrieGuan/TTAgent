@@ -2,10 +2,22 @@ export type AIProvider = 'anthropic' | 'openai' | 'zhipuai' | 'ollama' | 'custom
 
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool'
 
+export type AttachmentType = 'image' | 'file'
+
+export interface Attachment {
+  type: AttachmentType
+  name: string
+  mimeType: string
+  /** base64 编码的内容（图片）或纯文本（文本文件） */
+  data: string
+  size: number
+}
+
 export interface ChatMessage {
   id: string
   role: MessageRole
   content: string
+  attachments?: Attachment[]
   timestamp: number
   toolCalls?: MCPToolCall[]
   toolResults?: MCPToolResult[]

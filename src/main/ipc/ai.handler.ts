@@ -6,7 +6,7 @@ import { IPC_CHANNELS } from '@shared/constants/ipc.channels'
 import { ZHIPUAI_BASE_URL } from '@shared/constants/providers'
 import { persistMessage } from './session.handler'
 import type { AIRequestPayload, AIStreamChunk, IPCResponse } from '@shared/types/ipc.types'
-import type { ChatMessage } from '@shared/types/ai.types'
+import type { ChatMessage, Attachment } from '@shared/types/ai.types'
 
 // 存储活跃流的 AbortController，用于取消
 const activeStreams = new Map<string, AbortController>()
@@ -98,6 +98,72 @@ export function registerAIHandlers(): void {
   })
 }
 
+// 将附件转换为 Anthropic 图片内容块
+function buildAnthropicContent(
+  text: string,
+  attachments?: Attachment[]
+): Anthropic.MessageParam['content'] {
+  if (!attachments || attachments.length === 0) {
+    return text
+  }
+
+  const parts: Anthropic.ContentBlockParam[] = []
+
+  for (const att of attachments) {
+    if (att.type === 'image') {
+      const mediaType = att.mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+      parts.push({
+        type: 'image',
+        source: { type: 'base64', media_type: mediaType, data: att.data }
+      })
+    } else if (att.type === 'file') {
+      // 文件作为文本注入到消息中
+      parts.push({
+        type: 'text',
+        text: `[文件: ${att.name}]\n\`\`\`\n${att.data}\n\`\`\``
+      })
+    }
+  }
+
+  if (text) {
+    parts.push({ type: 'text', text })
+  }
+
+  return parts
+}
+
+// 将附件转换为 OpenAI 内容部分
+function buildOpenAIContent(
+  text: string,
+  attachments?: Attachment[]
+): OpenAI.Chat.ChatCompletionContentPart[] | string {
+  if (!attachments || attachments.length === 0) {
+    return text
+  }
+
+  const parts: OpenAI.Chat.ChatCompletionContentPart[] = []
+
+  for (const att of attachments) {
+    if (att.type === 'image') {
+      parts.push({
+        type: 'image_url',
+        image_url: { url: `data:${att.mimeType};base64,${att.data}` }
+      })
+    } else if (att.type === 'file') {
+      parts.push({
+        type: 'text',
+        text: `[文件: ${att.name}]\n\`\`\`\n${att.data}\n\`\`\``
+      })
+    }
+  }
+
+  if (text) {
+    parts.push({ type: 'text', text })
+  }
+
+  return parts
+}
+
 async function streamAnthropic(opts: {
   sender: Electron.WebContents
   sessionId: string
@@ -114,11 +180,11 @@ async function streamAnthropic(opts: {
 
   const client = new Anthropic({ apiKey: config.apiKey })
 
-  const anthropicMessages = messages
+  const anthropicMessages: Anthropic.MessageParam[] = messages
     .filter((m) => m.role !== 'system')
     .map((m) => ({
       role: m.role as 'user' | 'assistant',
-      content: m.content
+      content: buildAnthropicContent(m.content, m.attachments)
     }))
 
   let fullContent = ''
@@ -172,10 +238,12 @@ async function streamOpenAI(opts: {
     ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
     ...messages
       .filter((m) => m.role !== 'system')
-      .map((m) => ({
-        role: m.role as 'user' | 'assistant',
-        content: m.content
-      }))
+      .map((m): OpenAI.Chat.ChatCompletionMessageParam => {
+        if (m.role === 'user') {
+          return { role: 'user', content: buildOpenAIContent(m.content, m.attachments) }
+        }
+        return { role: 'assistant', content: m.content }
+      })
   ]
 
   let fullContent = ''
@@ -222,10 +290,12 @@ async function streamZhipuAI(opts: {
     ...(systemPrompt ? [{ role: 'system' as const, content: systemPrompt }] : []),
     ...messages
       .filter((m) => m.role !== 'system')
-      .map((m) => ({
-        role: m.role as 'user' | 'assistant',
-        content: m.content
-      }))
+      .map((m): OpenAI.Chat.ChatCompletionMessageParam => {
+        if (m.role === 'user') {
+          return { role: 'user', content: buildOpenAIContent(m.content, m.attachments) }
+        }
+        return { role: 'assistant', content: m.content }
+      })
   ]
 
   let fullContent = ''

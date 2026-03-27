@@ -29,18 +29,18 @@ export function SettingsPage() {
       updateProvider('anthropic', {
         provider: 'anthropic' as AIProvider,
         apiKey: anthropicKey,
-        defaultModel: anthropicConfig?.defaultModel ?? 'claude-sonnet-4-5'
+        defaultModel: anthropicConfig?.defaultModel ?? 'claude-sonnet-4-6'
       }),
       updateProvider('openai', {
         provider: 'openai' as AIProvider,
         apiKey: openaiKey,
         baseUrl: openaiBase || undefined,
-        defaultModel: openaiConfig?.defaultModel ?? 'gpt-4o'
+        defaultModel: openaiConfig?.defaultModel ?? 'gpt-4.1'
       }),
       updateProvider('zhipuai', {
         provider: 'zhipuai' as AIProvider,
         apiKey: zhipuKey,
-        defaultModel: zhipuConfig?.defaultModel ?? 'glm-4-plus'
+        defaultModel: zhipuConfig?.defaultModel ?? 'glm-5.1'
       })
     ])
     setSaving(false)
@@ -96,7 +96,7 @@ export function SettingsPage() {
                 placeholder="在 open.bigmodel.cn 获取"
               />
               <p className="text-xs text-[var(--color-text-muted)]">
-                支持模型：GLM-4 Plus / GLM-4 / GLM-4 Air / GLM-4 Flash（免费）/ GLM-4V Plus / CodeGeeX-4
+                支持模型：GLM-5.1 / GLM-4.7 / GLM-4.5 Air / GLM-4.7 Flash（免费）/ GLM-4.6V（视觉）
               </p>
             </ProviderSection>
           </div>

@@ -3,23 +3,33 @@ import { useChatStore } from '@stores/chat.store'
 import { useSessionStore } from '@stores/session.store'
 import { useSettingsStore } from '@stores/settings.store'
 import { useAgentStore } from '@stores/agent.store'
-import type { ChatMessage } from '@shared/types/ai.types'
+import type { ChatMessage, Attachment } from '@shared/types/ai.types'
 import type { AIRequestPayload } from '@shared/types/ipc.types'
 
 export function useChat() {
-  const { addMessage, getMessages, isStreaming, streamingContent, streamingSessionId } =
-    useChatStore()
+  const {
+    addMessage,
+    getMessages,
+    isThinking,
+    isStreaming,
+    streamingContent,
+    streamingSessionId,
+    startThinking
+  } = useChatStore()
   const { currentSessionId, getCurrentSession } = useSessionStore()
   const { providers, agentSystemPrompt } = useSettingsStore()
   const { allTools, toolsEnabled } = useAgentStore()
 
   const messages = currentSessionId ? getMessages(currentSessionId) : []
-  const currentStreamingContent =
-    isStreaming && streamingSessionId === currentSessionId ? streamingContent : ''
+  const isActiveSession = streamingSessionId === currentSessionId
+  const currentStreamingContent = isActiveSession ? streamingContent : ''
+  const currentIsStreaming = isStreaming && isActiveSession
+  const currentIsThinking = isThinking && isActiveSession
 
   const sendMessage = useCallback(
-    async (text: string) => {
-      if (!currentSessionId || !text.trim() || isStreaming) return
+    async (text: string, attachments?: Attachment[]) => {
+      if (!currentSessionId || (isStreaming && isActiveSession)) return
+      if (!text.trim() && (!attachments || attachments.length === 0)) return
 
       const session = getCurrentSession()
       if (!session) return
@@ -35,9 +45,13 @@ export function useChat() {
         id: `${Date.now()}-user`,
         role: 'user',
         content: text,
+        attachments: attachments && attachments.length > 0 ? attachments : undefined,
         timestamp: Date.now()
       }
       addMessage(currentSessionId, userMsg)
+
+      // 标记为思考中
+      startThinking(currentSessionId)
 
       // 构建发送给 AI 的消息列表
       const allMessages = [...getMessages(currentSessionId)]
@@ -56,25 +70,28 @@ export function useChat() {
     [
       currentSessionId,
       isStreaming,
+      isActiveSession,
       getCurrentSession,
       providers,
       agentSystemPrompt,
       allTools,
       toolsEnabled,
       addMessage,
-      getMessages
+      getMessages,
+      startThinking
     ]
   )
 
   const cancelStream = useCallback(() => {
-    if (currentSessionId && isStreaming) {
+    if (currentSessionId && (currentIsStreaming || currentIsThinking)) {
       window.api.cancelStream(currentSessionId)
     }
-  }, [currentSessionId, isStreaming])
+  }, [currentSessionId, currentIsStreaming, currentIsThinking])
 
   return {
     messages,
-    isStreaming,
+    isThinking: currentIsThinking,
+    isStreaming: currentIsStreaming,
     streamingContent: currentStreamingContent,
     sendMessage,
     cancelStream

@@ -4,6 +4,7 @@ import type { ChatMessage } from '@shared/types/ai.types'
 
 interface ChatState {
   messagesBySession: Record<string, ChatMessage[]>
+  isThinking: boolean
   isStreaming: boolean
   streamingContent: string
   streamingSessionId: string | null
@@ -14,6 +15,8 @@ interface ChatState {
   loadMessages: (sessionId: string) => Promise<void>
   // 添加用户消息（发送前乐观更新）
   addMessage: (sessionId: string, msg: ChatMessage) => void
+  // 开始思考（消息已发送，等待第一个流块）
+  startThinking: (sessionId: string) => void
   // 流式追加文本
   appendStreamChunk: (sessionId: string, text: string) => void
   // 流结束，将 streamingContent 写入 messages
@@ -25,6 +28,7 @@ interface ChatState {
 export const useChatStore = create<ChatState>()(
   immer((set, get) => ({
     messagesBySession: {},
+    isThinking: false,
     isStreaming: false,
     streamingContent: '',
     streamingSessionId: null,
@@ -48,8 +52,17 @@ export const useChatStore = create<ChatState>()(
         state.messagesBySession[sessionId].push(msg)
       }),
 
+    startThinking: (sessionId) =>
+      set((state) => {
+        state.isThinking = true
+        state.isStreaming = false
+        state.streamingContent = ''
+        state.streamingSessionId = sessionId
+      }),
+
     appendStreamChunk: (sessionId, text) =>
       set((state) => {
+        state.isThinking = false
         state.isStreaming = true
         state.streamingSessionId = sessionId
         state.streamingContent += text
@@ -68,6 +81,7 @@ export const useChatStore = create<ChatState>()(
             timestamp: Date.now()
           })
         }
+        state.isThinking = false
         state.streamingContent = ''
         state.streamingSessionId = null
         state.isStreaming = false
