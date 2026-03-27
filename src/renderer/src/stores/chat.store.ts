@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import type { ChatMessage, MCPToolCall } from '@shared/types/ai.types'
+import type { ContextEvent } from '@shared/types/context.types'
 
 interface ChatState {
   messagesBySession: Record<string, ChatMessage[]>
@@ -9,6 +10,7 @@ interface ChatState {
   streamingContent: string
   streamingSessionId: string | null
   streamingToolCalls: MCPToolCall[]
+  contextEventsBySession: Record<string, ContextEvent[]>
 
   getMessages: (sessionId: string) => ChatMessage[]
   loadMessages: (sessionId: string) => Promise<void>
@@ -22,7 +24,10 @@ interface ChatState {
     updates: Partial<MCPToolCall>
   ) => void
   finalizeStream: (sessionId: string) => void
+  resetStreamingState: (sessionId: string) => void
   clearMessages: (sessionId: string) => Promise<void>
+  addContextEvent: (sessionId: string, event: ContextEvent) => void
+  clearContextEvents: (sessionId: string) => void
 }
 
 export const useChatStore = create<ChatState>()(
@@ -33,6 +38,7 @@ export const useChatStore = create<ChatState>()(
     streamingContent: '',
     streamingSessionId: null,
     streamingToolCalls: [],
+    contextEventsBySession: {},
 
     getMessages: (sessionId) => get().messagesBySession[sessionId] ?? [],
 
@@ -88,7 +94,7 @@ export const useChatStore = create<ChatState>()(
     finalizeStream: (sessionId) =>
       set((state) => {
         if (state.streamingSessionId === sessionId) {
-          if (state.streamingContent || state.streamingToolCalls.length > 0) {
+          if (state.streamingContent) {
             if (!state.messagesBySession[sessionId]) {
               state.messagesBySession[sessionId] = []
             }
@@ -96,8 +102,6 @@ export const useChatStore = create<ChatState>()(
               id: `${Date.now()}-assistant`,
               role: 'assistant',
               content: state.streamingContent,
-              toolCalls:
-                state.streamingToolCalls.length > 0 ? [...state.streamingToolCalls] : undefined,
               timestamp: Date.now()
             })
           }
@@ -109,11 +113,34 @@ export const useChatStore = create<ChatState>()(
         state.streamingToolCalls = []
       }),
 
+    resetStreamingState: (sessionId) =>
+      set((state) => {
+        if (state.streamingSessionId === sessionId) {
+          state.streamingContent = ''
+          state.streamingToolCalls = []
+          state.isThinking = true
+          state.isStreaming = false
+        }
+      }),
+
     clearMessages: async (sessionId) => {
       await window.api.clearSessionMessages(sessionId)
       set((state) => {
         state.messagesBySession[sessionId] = []
       })
-    }
+    },
+
+    addContextEvent: (sessionId, event) =>
+      set((state) => {
+        if (!state.contextEventsBySession[sessionId]) {
+          state.contextEventsBySession[sessionId] = []
+        }
+        state.contextEventsBySession[sessionId].push(event)
+      }),
+
+    clearContextEvents: (sessionId) =>
+      set((state) => {
+        state.contextEventsBySession[sessionId] = []
+      })
   }))
 )

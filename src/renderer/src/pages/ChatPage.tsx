@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { MessageList } from '@components/chat/MessageList'
 import { InputArea } from '@components/chat/InputArea'
 import { useChat } from '@hooks/useChat'
 import { useChatStore } from '@stores/chat.store'
 import { useSessionStore } from '@stores/session.store'
+import { useAgentStore } from '@stores/agent.store'
 import { PROVIDER_MODELS, PROVIDER_LABELS } from '@shared/constants/providers'
 import type { AIProvider } from '@shared/types/ai.types'
 
@@ -17,19 +18,19 @@ export function ChatPage() {
     sendMessage,
     cancelStream
   } = useChat()
-  const { loadMessages } = useChatStore()
+  const { loadMessages, contextEventsBySession } = useChatStore()
   const { currentSessionId, getCurrentSession, updateModel } = useSessionStore()
+  const { allTools, toolsEnabled } = useAgentStore()
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
+  const [compressing, setCompressing] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // 切换会话时加载历史消息
   useEffect(() => {
     if (currentSessionId) {
       loadMessages(currentSessionId)
     }
   }, [currentSessionId, loadMessages])
 
-  // 点击外部关闭下拉
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
@@ -44,10 +45,33 @@ export function ChatPage() {
 
   const session = getCurrentSession()
 
+  const budgetEvent = useMemo(() => {
+    const events = currentSessionId ? contextEventsBySession[currentSessionId] : undefined
+    if (!events) return null
+    const budgetEvents = events.filter((e) => e.type === 'context_budget_info')
+    return budgetEvents.length > 0 ? budgetEvents[budgetEvents.length - 1] : null
+  }, [currentSessionId, contextEventsBySession])
+
   const handleModelSelect = async (provider: AIProvider, modelId: string) => {
     if (!currentSessionId) return
     await updateModel(currentSessionId, provider, modelId)
     setModelDropdownOpen(false)
+  }
+
+  const handleCompress = async () => {
+    if (!currentSessionId || !session || compressing || isStreaming || isThinking) return
+    setCompressing(true)
+    try {
+      await window.api.compressContext({
+        sessionId: currentSessionId,
+        provider: session.provider,
+        model: session.model,
+        mcpToolsCount: toolsEnabled ? allTools.length : 0
+      })
+      await loadMessages(currentSessionId)
+    } finally {
+      setCompressing(false)
+    }
   }
 
   if (!currentSessionId) {
@@ -58,7 +82,6 @@ export function ChatPage() {
     )
   }
 
-  // 当前选中模型的显示名
   const currentModelName = session
     ? (PROVIDER_MODELS[session.provider]?.find((m) => m.id === session.model)?.name ??
       session.model)
@@ -66,13 +89,11 @@ export function ChatPage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* 顶部会话信息栏 */}
       <div className="flex items-center gap-2 border-b border-[var(--color-border-subtle)] px-6 py-2.5">
         <span className="text-sm font-medium text-[var(--color-text-primary)]">
           {session?.title ?? '对话'}
         </span>
 
-        {/* 模型选择器 */}
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setModelDropdownOpen((v) => !v)}
@@ -121,18 +142,41 @@ export function ChatPage() {
             </div>
           )}
         </div>
+
+        <div className="flex-1" />
+
+        {budgetEvent && (
+          <span
+            className={`text-[10px] font-mono ${
+              (budgetEvent.data?.usagePercent ?? 0) > 75
+                ? 'text-amber-400'
+                : 'text-[var(--color-text-muted)]'
+            }`}
+          >
+            {budgetEvent.data?.usagePercent ?? '?'}%
+          </span>
+        )}
+
+        <button
+          onClick={handleCompress}
+          disabled={compressing || isStreaming || isThinking || messages.length === 0}
+          className="flex items-center gap-1 rounded-md px-2 py-0.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-2)] transition-colors border border-transparent hover:border-[var(--color-border)] disabled:opacity-40 disabled:pointer-events-none"
+          title="压缩上下文"
+        >
+          <CompressIcon spinning={compressing} />
+          <span>{compressing ? '压缩中...' : '压缩'}</span>
+        </button>
       </div>
 
-      {/* 消息列表 */}
       <MessageList
         messages={messages}
         isThinking={isThinking}
         isStreaming={isStreaming}
         streamingContent={streamingContent}
         streamingToolCalls={streamingToolCalls}
+        contextEvents={currentSessionId ? (contextEventsBySession[currentSessionId] ?? []) : []}
       />
 
-      {/* 输入区域 */}
       <InputArea
         onSend={sendMessage}
         onCancel={cancelStream}
@@ -168,3 +212,21 @@ const CheckIcon = () => (
     <polyline points="20 6 9 17 4 12" />
   </svg>
 )
+
+function CompressIcon({ spinning }: { spinning: boolean }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      className={spinning ? 'animate-spin' : ''}
+    >
+      <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+      <polyline points="12 12 12 21" />
+      <polyline points="8 17 12 21 16 17" />
+    </svg>
+  )
+}

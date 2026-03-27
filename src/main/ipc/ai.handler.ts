@@ -11,6 +11,10 @@ import { toAnthropicTools, toOpenAITools } from '../tools/tool-schema'
 import type { AIRequestPayload, AIStreamChunk, IPCResponse } from '@shared/types/ipc.types'
 import type { ChatMessage, Attachment } from '@shared/types/ai.types'
 import type { MCPTool } from '@shared/types/mcp.types'
+import { PROVIDER_MODELS } from '@shared/constants/providers'
+import { manageContext, applyMidLoopCheck } from '../lib/context-strategy'
+import { emitContextEvent, createEvent } from '../lib/context-events'
+import { countMessagesTokens, calculateBudget } from '../lib/token-counter'
 
 const activeStreams = new Map<string, AbortController>()
 const MAX_AGENT_ITERATIONS = 15
@@ -53,11 +57,42 @@ export function registerAIHandlers(): void {
       const toolRouter = new ToolRouter(mcpClients)
 
       try {
-        const agentMessages: ChatMessage[] = [...messages]
+        const contextWindow = getContextWindow(provider, model)
+
+        const ctxResult = manageContext({
+          sessionId,
+          messages,
+          contextWindow,
+          maxTokens,
+          tools: allTools
+        })
+
+        for (const evt of ctxResult.events) {
+          emitContextEvent(sender, evt)
+        }
+
+        const agentMessages: ChatMessage[] = [...ctxResult.messages]
         let finalContent = ''
 
         for (let iteration = 0; iteration < MAX_AGENT_ITERATIONS; iteration++) {
           if (abortController.signal.aborted) break
+
+          if (iteration > 0) {
+            const midCheck = applyMidLoopCheck(
+              agentMessages,
+              contextWindow,
+              maxTokens,
+              allTools.length > 0,
+              sessionId
+            )
+            for (const evt of midCheck.events) {
+              emitContextEvent(sender, evt)
+            }
+            if (midCheck.messages !== agentMessages) {
+              agentMessages.length = 0
+              agentMessages.push(...midCheck.messages)
+            }
+          }
 
           const result = await streamWithTools({
             sender,
@@ -102,6 +137,13 @@ export function registerAIHandlers(): void {
           agentMessages.push(assistantMsg)
           persistMessage(sessionId, assistantMsg)
 
+          const agentMsgChunk: AIStreamChunk = {
+            type: 'agent_message',
+            sessionId,
+            agentMessage: assistantMsg
+          }
+          if (!sender.isDestroyed()) sender.send(IPC_CHANNELS.AI_STREAM_CHUNK, agentMsgChunk)
+
           const toolResultMsgs = buildToolResultMessages(provider, toolResults)
           for (const trMsg of toolResultMsgs) {
             agentMessages.push(trMsg)
@@ -125,6 +167,21 @@ export function registerAIHandlers(): void {
             }
             persistMessage(sessionId, assistantMsg)
           }
+        }
+
+        {
+          const budget = calculateBudget(contextWindow, maxTokens, allTools.length > 0)
+          const totalTokens = countMessagesTokens(agentMessages)
+          const usagePercent = Math.round((totalTokens / budget.usableInputBudget) * 100)
+          emitContextEvent(
+            sender,
+            createEvent(
+              'context_budget_info',
+              sessionId,
+              `上下文使用 ${usagePercent}%（${fmtTk(totalTokens)} / ${fmtTk(budget.usableInputBudget)}）`,
+              { totalTokens, budgetTokens: budget.usableInputBudget, usagePercent }
+            )
+          )
         }
 
         return { success: true }
@@ -644,4 +701,19 @@ async function streamOpenAICompatible(
   }
 
   return { fullContent, toolCalls }
+}
+
+function getContextWindow(provider: string, model: string): number {
+  const models = PROVIDER_MODELS[provider as keyof typeof PROVIDER_MODELS]
+  if (models) {
+    const found = models.find((m) => m.id === model)
+    if (found) return found.contextWindow
+  }
+  return 128000
+}
+
+function fmtTk(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+  return String(n)
 }

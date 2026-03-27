@@ -28,6 +28,7 @@ export type AIStreamChunkType =
   | 'tool_result'
   | 'stop'
   | 'error'
+  | 'agent_message'
 
 export interface AIStreamChunk {
   type: AIStreamChunkType
@@ -40,6 +41,8 @@ export interface AIStreamChunk {
   toolOutput?: string
   /** tool_result 专用：工具执行是否出错 */
   toolIsError?: boolean
+  /** agent_message 专用：中间轮次的完整 assistant 消息（含 toolCalls） */
+  agentMessage?: ChatMessage
   error?: string
 }
 

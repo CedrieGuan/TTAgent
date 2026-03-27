@@ -65,6 +65,31 @@ npm run dist:mac     # 仅 macOS
 
 模型列表和提供商标签定义在 `src/shared/constants/providers.ts`，新增提供商需同时更新此文件和 `ai.handler.ts`。
 
+### Agent 循环与工具调用
+
+AI handler 实现了多轮工具调用循环（最多 `MAX_AGENT_ITERATIONS = 15` 次）：
+
+1. 发送消息 → LLM 返回文本 + 可选工具调用
+2. 若有工具调用：执行工具 → 将结果作为 `user`（Anthropic）或 `tool`（OpenAI）消息追加 → 再次调用 LLM
+3. 无工具调用时循环结束，最终 assistant 消息持久化
+
+工具来源合并自**本地内置工具**和 **MCP 工具**，由 `ToolRouter`（`src/main/tools/tool-router.ts`）路由：
+- 本地工具名以 `local_` 为前缀（定义于 `src/main/tools/local-tools.ts`）：`local_read_file`、`local_write_file`、`local_list_directory`、`local_shell_execute`
+- MCP 工具通过已连接的 MCP 客户端轮询执行
+
+工具 schema 转换（MCP → Anthropic/OpenAI 格式）在 `src/main/tools/tool-schema.ts`。
+
+### 技能（Skill）系统
+
+技能是附加系统提示，用于切换 AI 行为模式，持久化于 `electron-store` 的 `agentSkills` key：
+- 内置技能定义在 `src/shared/constants/builtin-skills.ts`（代码审查、翻译、写作、数据分析），`isBuiltIn: true` 时不可删除
+- 自定义技能可通过 `skill.handler.ts` CRUD，渲染进程通过 `skill.store.ts` 管理
+- 类型定义在 `src/shared/types/skill.types.ts`
+
+### 上下文管理
+
+`src/shared/types/context.types.ts` 定义了上下文长度管理的数据结构（`TokenBudget`、`ConversationTurn`、`ContextStrategyConfig`、`ContextEvent`），用于在接近模型上下文窗口限制时自动截断或摘要历史消息。默认配置：软阈值 75%、硬阈值 90%、单条消息 offload 阈值 8000 tokens。
+
 ### 路径别名
 
 | 别名 | 路径（渲染进程） |
@@ -84,6 +109,8 @@ npm run dist:mac     # 仅 macOS
 - IPC 载荷（`AIRequestPayload`、`AIStreamChunk`、`UpdateSessionPayload`）→ `src/shared/types/ipc.types.ts`
 - 会话结构 → `src/shared/types/session.types.ts`
 - MCP 相关 → `src/shared/types/mcp.types.ts`
+- 技能 → `src/shared/types/skill.types.ts`
+- 上下文管理（`TokenBudget`、`ContextStrategyConfig`、`ContextEvent`）→ `src/shared/types/context.types.ts`
 
 ### 注意事项
 

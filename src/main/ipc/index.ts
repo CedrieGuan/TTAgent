@@ -4,6 +4,7 @@ import { registerConfigHandlers } from './config.handler'
 import { registerMCPHandlers } from './mcp.handler'
 import { registerWindowHandlers } from './window.handler'
 import { registerSkillHandlers } from './skill.handler'
+import { registerContextHandlers } from './context.handler'
 
 export function registerAllHandlers(): void {
   registerConfigHandlers()
@@ -12,4 +13,5 @@ export function registerAllHandlers(): void {
   registerMCPHandlers()
   registerWindowHandlers()
   registerSkillHandlers()
+  registerContextHandlers()
 }

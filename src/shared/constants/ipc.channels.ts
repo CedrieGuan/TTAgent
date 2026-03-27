@@ -25,6 +25,10 @@ export const IPC_CHANNELS = {
   MCP_DISCONNECT_SERVER: 'mcp:disconnect-server',
   MCP_LIST_SERVERS: 'mcp:list-servers',
 
+  // Context Strategy
+  CONTEXT_EVENT: 'context:event',
+  CONTEXT_COMPRESS: 'context:compress',
+
   // Agent Skills
   SKILL_LIST: 'skill:list',
   SKILL_CREATE: 'skill:create',

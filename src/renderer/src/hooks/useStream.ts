@@ -2,10 +2,18 @@ import { useEffect } from 'react'
 import { useChatStore } from '@stores/chat.store'
 import type { AIStreamChunk } from '@shared/types/ipc.types'
 import type { MCPToolCall } from '@shared/types/ai.types'
+import type { ContextEvent } from '@shared/types/context.types'
 
 export function useStream(): void {
-  const { appendStreamChunk, finalizeStream, addStreamingToolCall, updateStreamingToolCall } =
-    useChatStore()
+  const {
+    appendStreamChunk,
+    finalizeStream,
+    addStreamingToolCall,
+    updateStreamingToolCall,
+    addMessage,
+    resetStreamingState,
+    addContextEvent
+  } = useChatStore()
 
   useEffect(() => {
     const cleanup = window.api.onStreamChunk((chunk: AIStreamChunk) => {
@@ -37,6 +45,13 @@ export function useStream(): void {
           }
           break
 
+        case 'agent_message':
+          if (chunk.sessionId && chunk.agentMessage) {
+            addMessage(chunk.sessionId, chunk.agentMessage)
+            resetStreamingState(chunk.sessionId)
+          }
+          break
+
         case 'stop':
           if (chunk.sessionId) {
             finalizeStream(chunk.sessionId)
@@ -53,5 +68,20 @@ export function useStream(): void {
     })
 
     return cleanup
-  }, [appendStreamChunk, finalizeStream, addStreamingToolCall, updateStreamingToolCall])
+  }, [
+    appendStreamChunk,
+    finalizeStream,
+    addStreamingToolCall,
+    updateStreamingToolCall,
+    addMessage,
+    resetStreamingState
+  ])
+
+  useEffect(() => {
+    const cleanup = window.api.onContextEvent((event: ContextEvent) => {
+      addContextEvent(event.sessionId, event)
+    })
+
+    return cleanup
+  }, [addContextEvent])
 }

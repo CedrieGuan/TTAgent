@@ -13,6 +13,7 @@ import type { Session } from '../shared/types/session.types'
 import type { ChatMessage } from '../shared/types/ai.types'
 import type { MCPServerStatus, MCPTool } from '../shared/types/mcp.types'
 import type { AgentSkill } from '../shared/types/skill.types'
+import type { ContextEvent } from '../shared/types/context.types'
 
 const api = {
   // ── AI ──────────────────────────────────────────────────────
@@ -28,6 +29,20 @@ const api = {
     ipcRenderer.on(IPC_CHANNELS.AI_STREAM_CHUNK, listener)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.AI_STREAM_CHUNK, listener)
   },
+
+  onContextEvent: (callback: (event: ContextEvent) => void): (() => void) => {
+    const listener = (_: Electron.IpcRendererEvent, event: ContextEvent) => callback(event)
+    ipcRenderer.on(IPC_CHANNELS.CONTEXT_EVENT, listener)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.CONTEXT_EVENT, listener)
+  },
+
+  compressContext: (payload: {
+    sessionId: string
+    provider: string
+    model: string
+    systemPrompt?: string
+    mcpToolsCount?: number
+  }): Promise<IPCResponse> => ipcRenderer.invoke(IPC_CHANNELS.CONTEXT_COMPRESS, payload),
 
   // ── Sessions ─────────────────────────────────────────────────
   listSessions: (): Promise<IPCResponse<Session[]>> =>
