@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-base: #0f0f0f;
+  --color-bg-surface: #1a1a1a;
+  --color-bg-surface-2: #222222;
+  --color-bg-hover: #2a2a2a;
+  --color-border: #2e2e2e;
+  --color-border-subtle: #1e1e1e;
+  --color-text-primary: #f0f0f0;
+  --color-text-secondary: #a0a0a0;
+  --color-text-muted: #666666;
+  --color-accent: #7c5cbf;
+  --color-accent-hover: #9370db;
+  --color-accent-subtle: rgba(124, 92, 191, 0.15);
+  --color-success: #3ecf8e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --font-sans: "Inter", "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-bg-base);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+}
+
+/* 允许文本区域选中 */
+input,
+textarea,
+[contenteditable] {
+  user-select: text;
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-bg-hover);
+}
+
+/* 拖拽标题栏区域 */
+.drag-region {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}

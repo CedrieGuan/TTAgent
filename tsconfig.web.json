@@ -1,0 +1,20 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
+  "include": [
+    "src/renderer/src/**/*",
+    "src/renderer/index.html",
+    "src/shared/**/*"
+  ],
+  "compilerOptions": {
+    "composite": true,
+    "paths": {
+      "@renderer/*": ["./src/renderer/src/*"],
+      "@shared/*": ["./src/shared/*"],
+      "@components/*": ["./src/renderer/src/components/*"],
+      "@pages/*": ["./src/renderer/src/pages/*"],
+      "@stores/*": ["./src/renderer/src/stores/*"],
+      "@hooks/*": ["./src/renderer/src/hooks/*"],
+      "@lib/*": ["./src/renderer/src/lib/*"]
+    }
+  }
+}

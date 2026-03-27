@@ -1,0 +1,38 @@
+# 依赖与构建产物
+node_modules/
+out/
+dist/
+
+# 环境变量（含 API Key，绝对不能提交）
+.env
+.env.local
+.env.*.local
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 日志
+*.log
+npm-debug.log*
+
+# 编辑器本地配置（个人偏好，不强制共享）
+.vscode/
+.idea/
+*.suo
+*.user
+
+# Claude Code 本地权限配置（个人开发环境）
+.claude/
+
+# 代码签名证书（敏感，绝对不能提交）
+*.p12
+*.pfx
+*.pem
+*.key
+resources/entitlements.mac.plist
+
+# electron-builder 临时文件
+app-update.yml
+dev-app-update.yml
