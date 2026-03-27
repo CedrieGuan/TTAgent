@@ -25,6 +25,8 @@ interface StoreSchema {
   /** 消息按 sessionId 分组存储 */
   messages: Record<string, SessionWithMessages['messages']>
   agentSystemPrompt: string
+  /** 记忆工作区路径（空字符串表示未设置） */
+  memoryWorkspacePath: string
 }
 
 const store = new Store<StoreSchema>({
@@ -50,7 +52,8 @@ const store = new Store<StoreSchema>({
     mcpServers: [],
     sessions: [],
     messages: {},
-    agentSystemPrompt: 'You are a helpful AI assistant.'
+    agentSystemPrompt: 'You are a helpful AI assistant.',
+    memoryWorkspacePath: ''
   }
 })
 

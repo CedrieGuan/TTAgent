@@ -8,6 +8,13 @@ import { immer } from 'zustand/middleware/immer'
 import type { ChatMessage, MCPToolCall } from '@shared/types/ai.types'
 import type { ContextEvent } from '@shared/types/context.types'
 
+/** 待用户确认的危险工具请求 */
+export interface PendingConfirm {
+  confirmId: string
+  toolName: string
+  toolInput: Record<string, unknown>
+}
+
 interface ChatState {
   /** 按 sessionId 分组的消息列表 */
   messagesBySession: Record<string, ChatMessage[]>
@@ -23,6 +30,8 @@ interface ChatState {
   streamingToolCalls: MCPToolCall[]
   /** 按 sessionId 分组的上下文管理事件 */
   contextEventsBySession: Record<string, ContextEvent[]>
+  /** 按 sessionId 分组的待确认工具请求 */
+  pendingConfirmsBySession: Record<string, PendingConfirm[]>
 
   getMessages: (sessionId: string) => ChatMessage[]
   loadMessages: (sessionId: string) => Promise<void>
@@ -40,6 +49,12 @@ interface ChatState {
   clearMessages: (sessionId: string) => Promise<void>
   addContextEvent: (sessionId: string, event: ContextEvent) => void
   clearContextEvents: (sessionId: string) => void
+  /** 添加一条待确认的工具请求 */
+  addPendingConfirm: (sessionId: string, confirm: PendingConfirm) => void
+  /** 移除指定的待确认请求 */
+  removePendingConfirm: (sessionId: string, confirmId: string) => void
+  /** 清空指定会话的所有待确认请求（流取消时调用） */
+  clearPendingConfirms: (sessionId: string) => void
 }
 
 export const useChatStore = create<ChatState>()(
@@ -51,6 +66,7 @@ export const useChatStore = create<ChatState>()(
     streamingSessionId: null,
     streamingToolCalls: [],
     contextEventsBySession: {},
+    pendingConfirmsBySession: {},
 
     /** 获取指定会话的消息列表（不存在则返回空数组） */
     getMessages: (sessionId) => get().messagesBySession[sessionId] ?? [],
@@ -170,6 +186,32 @@ export const useChatStore = create<ChatState>()(
     clearContextEvents: (sessionId) =>
       set((state) => {
         state.contextEventsBySession[sessionId] = []
+      }),
+
+    /** 添加一条待确认的工具请求 */
+    addPendingConfirm: (sessionId, confirm) =>
+      set((state) => {
+        if (!state.pendingConfirmsBySession[sessionId]) {
+          state.pendingConfirmsBySession[sessionId] = []
+        }
+        state.pendingConfirmsBySession[sessionId].push(confirm)
+      }),
+
+    /** 移除已响应的待确认请求 */
+    removePendingConfirm: (sessionId, confirmId) =>
+      set((state) => {
+        const list = state.pendingConfirmsBySession[sessionId]
+        if (list) {
+          state.pendingConfirmsBySession[sessionId] = list.filter(
+            (c) => c.confirmId !== confirmId
+          )
+        }
+      }),
+
+    /** 清空指定会话的所有待确认请求（流取消时调用） */
+    clearPendingConfirms: (sessionId) =>
+      set((state) => {
+        state.pendingConfirmsBySession[sessionId] = []
       })
   }))
 )

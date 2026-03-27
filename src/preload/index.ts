@@ -19,6 +19,7 @@ import type { ChatMessage } from '../shared/types/ai.types'
 import type { MCPServerStatus, MCPTool } from '../shared/types/mcp.types'
 import type { Skill, SkillSummary } from '../shared/types/skill.types'
 import type { ContextEvent } from '../shared/types/context.types'
+import type { Memory, MemoryEvent } from '../shared/types/memory.types'
 
 const api = {
   // ── AI 对话 ──────────────────────────────────────────────────
@@ -29,6 +30,12 @@ const api = {
   /** 取消指定会话的流式响应 */
   cancelStream: (sessionId: string): void =>
     ipcRenderer.send(IPC_CHANNELS.AI_CANCEL_STREAM, sessionId),
+
+  /** 响应工具确认请求（Allow / Reject / Always Allow） */
+  sendToolConfirmResponse: (payload: {
+    confirmId: string
+    response: 'allow' | 'reject' | 'always_allow'
+  }): void => ipcRenderer.send(IPC_CHANNELS.AI_TOOL_CONFIRM_RESPONSE, payload),
 
   /** 注册流式响应事件监听，返回清理函数（用于 useEffect cleanup） */
   onStreamChunk: (callback: (chunk: AIStreamChunk) => void): (() => void) => {
@@ -112,6 +119,41 @@ const api = {
   /** 用系统文件管理器打开技能目录 */
   openSkillDir: (): Promise<IPCResponse> =>
     ipcRenderer.invoke(IPC_CHANNELS.SKILL_OPEN_DIR),
+
+  // ── 长期记忆 ──────────────────────────────────────────────────
+  /** 获取全局和工作区记忆 */
+  getMemories: (
+    workspacePath?: string
+  ): Promise<IPCResponse<{ global: Memory[]; workspace: Memory[] }>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MEMORY_GET, workspacePath),
+
+  /** 删除单条记忆 */
+  deleteMemory: (payload: {
+    scope: 'global' | 'workspace'
+    id: string
+    workspacePath?: string
+  }): Promise<IPCResponse> => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_DELETE, payload),
+
+  /** 清空记忆（全局或工作区） */
+  clearMemories: (payload: {
+    scope: 'global' | 'workspace'
+    workspacePath?: string
+  }): Promise<IPCResponse> => ipcRenderer.invoke(IPC_CHANNELS.MEMORY_CLEAR, payload),
+
+  /** 获取当前工作区路径 */
+  getMemoryWorkspacePath: (): Promise<IPCResponse<string>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MEMORY_GET_WORKSPACE_PATH),
+
+  /** 设置工作区路径（空字符串表示清除） */
+  setMemoryWorkspacePath: (workspacePath: string): Promise<IPCResponse> =>
+    ipcRenderer.invoke(IPC_CHANNELS.MEMORY_SET_WORKSPACE_PATH, workspacePath),
+
+  /** 注册记忆事件监听，返回清理函数 */
+  onMemoryEvent: (callback: (event: MemoryEvent) => void): (() => void) => {
+    const listener = (_: Electron.IpcRendererEvent, event: MemoryEvent) => callback(event)
+    ipcRenderer.on(IPC_CHANNELS.MEMORY_EVENT, listener)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.MEMORY_EVENT, listener)
+  },
 
   // ── 窗口控制 ──────────────────────────────────────────────────
   minimizeWindow: (): void => ipcRenderer.send(IPC_CHANNELS.WINDOW_MINIMIZE),

@@ -5,9 +5,11 @@
  */
 import { useEffect } from 'react'
 import { useChatStore } from '@stores/chat.store'
+import { useMemoryStore } from '@stores/memory.store'
 import type { AIStreamChunk } from '@shared/types/ipc.types'
 import type { MCPToolCall } from '@shared/types/ai.types'
 import type { ContextEvent } from '@shared/types/context.types'
+import type { MemoryEvent } from '@shared/types/memory.types'
 
 export function useStream(): void {
   const {
@@ -17,8 +19,11 @@ export function useStream(): void {
     updateStreamingToolCall,
     addMessage,
     resetStreamingState,
-    addContextEvent
+    addContextEvent,
+    addPendingConfirm,
+    clearPendingConfirms
   } = useChatStore()
+  const { addMemoryEvent, refreshMemories } = useMemoryStore()
 
   useEffect(() => {
     // 注册流式响应事件监听
@@ -62,16 +67,29 @@ export function useStream(): void {
           }
           break
 
+        case 'tool_confirm_request':
+          // 危险工具确认请求：添加到待确认列表，在 UI 中展示确认卡片
+          if (chunk.sessionId && chunk.confirmId && chunk.toolName) {
+            addPendingConfirm(chunk.sessionId, {
+              confirmId: chunk.confirmId,
+              toolName: chunk.toolName,
+              toolInput: chunk.toolInput ?? {}
+            })
+          }
+          break
+
         case 'stop':
-          // 流结束：将累积内容保存为最终消息
+          // 流结束：将累积内容保存为最终消息，清空待确认请求
           if (chunk.sessionId) {
+            clearPendingConfirms(chunk.sessionId)
             finalizeStream(chunk.sessionId)
           }
           break
 
         case 'error':
-          // 错误：结束流并打印错误
+          // 错误：结束流并打印错误，清空待确认请求
           if (chunk.sessionId) {
+            clearPendingConfirms(chunk.sessionId)
             finalizeStream(chunk.sessionId)
           }
           console.error('[Stream Error]', chunk.error)
@@ -86,7 +104,9 @@ export function useStream(): void {
     addStreamingToolCall,
     updateStreamingToolCall,
     addMessage,
-    resetStreamingState
+    resetStreamingState,
+    addPendingConfirm,
+    clearPendingConfirms
   ])
 
   useEffect(() => {
@@ -97,4 +117,17 @@ export function useStream(): void {
 
     return cleanup
   }, [addContextEvent])
+
+  useEffect(() => {
+    // 注册记忆事件监听：提取完成后同步更新记忆列表
+    const cleanup = window.api.onMemoryEvent((event: MemoryEvent) => {
+      addMemoryEvent(event.sessionId, event)
+      // 提取完成且有新记忆时，刷新本地记忆缓存
+      if (event.type === 'memory_extraction_completed' && (event.addedCount ?? 0) > 0) {
+        refreshMemories().catch(console.error)
+      }
+    })
+
+    return cleanup
+  }, [addMemoryEvent, refreshMemories])
 }

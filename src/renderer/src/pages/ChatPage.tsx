@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MessageList } from '@components/chat/MessageList'
 import { InputArea } from '@components/chat/InputArea'
 import { useChat } from '@hooks/useChat'
 import { useChatStore } from '@stores/chat.store'
 import { useSessionStore } from '@stores/session.store'
 import { useAgentStore } from '@stores/agent.store'
+import { useMemoryStore } from '@stores/memory.store'
 import { PROVIDER_MODELS, PROVIDER_LABELS } from '@shared/constants/providers'
 import type { AIProvider } from '@shared/types/ai.types'
 
@@ -18,9 +19,11 @@ export function ChatPage() {
     sendMessage,
     cancelStream
   } = useChat()
-  const { loadMessages, contextEventsBySession } = useChatStore()
+  const { loadMessages, contextEventsBySession, pendingConfirmsBySession, removePendingConfirm } =
+    useChatStore()
   const { currentSessionId, getCurrentSession, updateModel } = useSessionStore()
   const { allTools, toolsEnabled } = useAgentStore()
+  const { memoryEventsBySession, loadMemories, loaded: memoryLoaded } = useMemoryStore()
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
   const [compressing, setCompressing] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -30,6 +33,12 @@ export function ChatPage() {
       loadMessages(currentSessionId)
     }
   }, [currentSessionId, loadMessages])
+
+  useEffect(() => {
+    if (!memoryLoaded) {
+      loadMemories().catch(console.error)
+    }
+  }, [memoryLoaded, loadMemories])
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -57,6 +66,15 @@ export function ChatPage() {
     await updateModel(currentSessionId, provider, modelId)
     setModelDropdownOpen(false)
   }
+
+  const handleConfirmRespond = useCallback(
+    (confirmId: string, response: 'allow' | 'reject' | 'always_allow') => {
+      if (!currentSessionId) return
+      removePendingConfirm(currentSessionId, confirmId)
+      window.api.sendToolConfirmResponse({ confirmId, response })
+    },
+    [currentSessionId, removePendingConfirm]
+  )
 
   const handleCompress = async () => {
     if (!currentSessionId || !session || compressing || isStreaming || isThinking) return
@@ -175,6 +193,12 @@ export function ChatPage() {
         streamingContent={streamingContent}
         streamingToolCalls={streamingToolCalls}
         contextEvents={currentSessionId ? (contextEventsBySession[currentSessionId] ?? []) : []}
+        memoryEvents={currentSessionId ? (memoryEventsBySession[currentSessionId] ?? []) : []}
+        sessionId={currentSessionId}
+        pendingConfirms={
+          currentSessionId ? (pendingConfirmsBySession[currentSessionId] ?? []) : []
+        }
+        onConfirmRespond={handleConfirmRespond}
       />
 
       <InputArea

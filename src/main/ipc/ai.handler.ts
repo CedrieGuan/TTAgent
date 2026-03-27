@@ -22,12 +22,22 @@ import { PROVIDER_MODELS } from '@shared/constants/providers'
 import { manageContext, applyMidLoopCheck } from '../lib/context-strategy'
 import { emitContextEvent, createEvent } from '../lib/context-events'
 import { countMessagesTokens, calculateBudget } from '../lib/token-counter'
+import { memoryManager } from '../memory/memory-manager'
 
 /** 活跃的流式请求 AbortController（sessionId -> controller） */
 const activeStreams = new Map<string, AbortController>()
 
 /** Agent Loop 最大迭代次数，防止无限循环 */
 const MAX_AGENT_ITERATIONS = 15
+
+/** 执行前需要用户确认的危险工具集合 */
+const DANGEROUS_TOOLS = new Set(['local_shell_execute', 'local_write_file'])
+
+/** 待处理的工具确认请求（confirmId -> resolve 回调） */
+const pendingConfirms = new Map<string, (response: 'allow' | 'reject' | 'always_allow') => void>()
+
+/** 每个会话中用户已授权"始终允许"的工具集合（sessionId -> Set<toolName>） */
+const sessionAlwaysAllowed = new Map<string, Set<string>>()
 
 /** 单次流式调用的返回结果 */
 interface StreamResult {
@@ -73,6 +83,9 @@ export function registerAIHandlers(): void {
       const allTools = mcpTools ?? []
       const toolRouter = new ToolRouter(mcpClients)
 
+      // 在 try 外声明，供 finally 块访问（触发记忆提取）
+      let agentMessages: ChatMessage[] = []
+
       try {
         const contextWindow = getContextWindow(provider, model)
 
@@ -89,7 +102,7 @@ export function registerAIHandlers(): void {
           emitContextEvent(sender, evt)
         }
 
-        const agentMessages: ChatMessage[] = [...ctxResult.messages]
+        agentMessages = [...ctxResult.messages]
         let finalContent = ''
 
         // Agent Loop：最多迭代 MAX_AGENT_ITERATIONS 次
@@ -226,6 +239,21 @@ export function registerAIHandlers(): void {
         // 无论成功或失败，都发送 stop 信号通知渲染进程流已结束
         const stopChunk: AIStreamChunk = { type: 'stop', sessionId }
         if (!sender.isDestroyed()) sender.send(IPC_CHANNELS.AI_STREAM_CHUNK, stopChunk)
+
+        // 异步触发记忆提取（fire-and-forget，不阻塞主对话流程）
+        if (agentMessages.length >= 2 && !abortController.signal.aborted) {
+          const workspacePath = store.get('memoryWorkspacePath') || undefined
+          memoryManager
+            .extractAndUpdateMemories({
+              sessionId,
+              messages: agentMessages,
+              provider,
+              model,
+              workspacePath,
+              sender: sender.isDestroyed() ? undefined : sender
+            })
+            .catch((err) => console.error('[AI] 记忆提取异常:', err))
+        }
       }
     }
   )
@@ -235,10 +263,23 @@ export function registerAIHandlers(): void {
     activeStreams.get(sessionId)?.abort()
     activeStreams.delete(sessionId)
   })
+
+  /** 接收渲染进程的工具确认响应，解除对应的 pending Promise */
+  ipcMain.on(
+    IPC_CHANNELS.AI_TOOL_CONFIRM_RESPONSE,
+    (_event, payload: { confirmId: string; response: 'allow' | 'reject' | 'always_allow' }) => {
+      const resolve = pendingConfirms.get(payload.confirmId)
+      if (resolve) {
+        pendingConfirms.delete(payload.confirmId)
+        resolve(payload.response)
+      }
+    }
+  )
 }
 
 /**
  * 顺序执行工具调用列表
+ * 危险工具（shell 执行、写文件）在执行前向渲染进程发起用户确认请求
  * 每次调用前后都向渲染进程发送状态更新
  */
 async function executeToolCalls(
@@ -252,6 +293,35 @@ async function executeToolCalls(
 
   for (const tc of toolCalls) {
     if (signal.aborted) break
+
+    // 危险工具：执行前请求用户确认
+    if (DANGEROUS_TOOLS.has(tc.name)) {
+      const confirmId = `${sessionId}-${tc.id}-${Date.now()}`
+      const decision = await requestToolConfirmation(
+        sender,
+        sessionId,
+        confirmId,
+        tc.name,
+        tc.input,
+        signal
+      )
+
+      if (decision === 'reject') {
+        // 用户拒绝：将拒绝结果加入列表，跳过实际执行
+        const rejectOutput = '[用户已拒绝此操作]'
+        const rejectChunk: AIStreamChunk = {
+          type: 'tool_result',
+          sessionId,
+          toolCallId: tc.id,
+          toolName: tc.name,
+          toolOutput: rejectOutput,
+          toolIsError: true
+        }
+        if (!sender.isDestroyed()) sender.send(IPC_CHANNELS.AI_STREAM_CHUNK, rejectChunk)
+        results.push({ id: tc.id, output: rejectOutput, isError: true })
+        continue
+      }
+    }
 
     // 通知渲染进程：工具调用开始
     const startChunk: AIStreamChunk = {
@@ -280,6 +350,57 @@ async function executeToolCalls(
   }
 
   return results
+}
+
+/**
+ * 向渲染进程发送工具确认请求，等待用户响应
+ * 若 AbortSignal 触发则自动返回 'reject'（取消流时防止死锁）
+ */
+async function requestToolConfirmation(
+  sender: Electron.WebContents,
+  sessionId: string,
+  confirmId: string,
+  toolName: string,
+  toolInput: Record<string, unknown>,
+  signal: AbortSignal
+): Promise<'allow' | 'reject'> {
+  // 检查是否已授权"始终允许"
+  if (sessionAlwaysAllowed.get(sessionId)?.has(toolName)) {
+    return 'allow'
+  }
+
+  // 向渲染进程发送确认请求
+  const confirmChunk: AIStreamChunk = {
+    type: 'tool_confirm_request',
+    sessionId,
+    confirmId,
+    toolName,
+    toolInput
+  }
+  if (!sender.isDestroyed()) sender.send(IPC_CHANNELS.AI_STREAM_CHUNK, confirmChunk)
+
+  return new Promise<'allow' | 'reject'>((resolve) => {
+    // 流被取消时自动拒绝，防止 Promise 永久挂起
+    const abortHandler = () => {
+      pendingConfirms.delete(confirmId)
+      resolve('reject')
+    }
+    signal.addEventListener('abort', abortHandler, { once: true })
+
+    pendingConfirms.set(confirmId, (response) => {
+      signal.removeEventListener('abort', abortHandler)
+      if (response === 'always_allow') {
+        // 记录"始终允许"，本会话内后续不再询问
+        if (!sessionAlwaysAllowed.has(sessionId)) {
+          sessionAlwaysAllowed.set(sessionId, new Set())
+        }
+        sessionAlwaysAllowed.get(sessionId)!.add(toolName)
+        resolve('allow')
+      } else {
+        resolve(response)
+      }
+    })
+  })
 }
 
 /**

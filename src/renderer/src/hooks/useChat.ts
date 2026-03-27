@@ -9,6 +9,7 @@ import { useSessionStore } from '@stores/session.store'
 import { useSettingsStore } from '@stores/settings.store'
 import { useAgentStore } from '@stores/agent.store'
 import { useSkillStore } from '@stores/skill.store'
+import { useMemoryStore } from '@stores/memory.store'
 import type { ChatMessage, Attachment } from '@shared/types/ai.types'
 import type { AIRequestPayload } from '@shared/types/ipc.types'
 
@@ -28,6 +29,7 @@ export function useChat() {
   const { allTools, toolsEnabled } = useAgentStore()
   const { getSkillSummaryPrompt, getActiveSkillInstructions, activateSkill, summaries } =
     useSkillStore()
+  const { getMemoryPrompt } = useMemoryStore()
 
   const messages = currentSessionId ? getMessages(currentSessionId) : []
   // 仅当流式响应属于当前会话时才展示
@@ -100,9 +102,10 @@ export function useChat() {
         messages: allMessages,
         provider: session.provider,
         model: session.model,
-        // 渐进式注入：基础提示 + 技能概览 + 已激活技能的完整指令
+        // 渐进式注入：基础提示 + 记忆 + 技能概览 + 已激活技能的完整指令
         systemPrompt: buildSystemPrompt(
           session.systemPrompt ?? agentSystemPrompt,
+          getMemoryPrompt(),
           getSkillSummaryPrompt(),
           getActiveSkillInstructions()
         ),
@@ -122,6 +125,7 @@ export function useChat() {
       toolsEnabled,
       summaries,
       activateSkill,
+      getMemoryPrompt,
       getSkillSummaryPrompt,
       getActiveSkillInstructions,
       addMessage,
@@ -153,15 +157,22 @@ export function useChat() {
  *
  * 层次：
  * 1. 基础系统提示
- * 2. 可用技能概览（仅 name + description 摘要，始终附加）
- * 3. 已激活技能的完整指令（用户通过斜杠命令触发后才注入）
+ * 2. 长期记忆（全局 + 工作区，始终附加）
+ * 3. 可用技能概览（仅 name + description 摘要，始终附加）
+ * 4. 已激活技能的完整指令（用户通过斜杠命令触发后才注入）
  */
 function buildSystemPrompt(
   basePrompt: string,
+  memoryPrompt: string,
   skillSummaryPrompt: string,
   activeInstructions: Record<string, string>
 ): string {
   let prompt = basePrompt
+
+  // 附加长期记忆（全局记忆 + 工作区记忆）
+  if (memoryPrompt) {
+    prompt += memoryPrompt
+  }
 
   // 附加技能概览（仅摘要，帮助 AI 知道有哪些技能可用）
   if (skillSummaryPrompt) {

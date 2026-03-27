@@ -23,13 +23,14 @@ export interface AIRequestPayload {
 
 /** AI 流式响应块的类型枚举 */
 export type AIStreamChunkType =
-  | 'text_delta'      // 文本增量
-  | 'tool_use_start'  // 工具调用开始
-  | 'tool_use_delta'  // 工具调用参数增量
-  | 'tool_result'     // 工具执行结果
-  | 'stop'            // 流结束
-  | 'error'           // 错误
-  | 'agent_message'   // Agent 中间轮次完整消息
+  | 'text_delta'          // 文本增量
+  | 'tool_use_start'      // 工具调用开始
+  | 'tool_use_delta'      // 工具调用参数增量
+  | 'tool_result'         // 工具执行结果
+  | 'stop'                // 流结束
+  | 'error'               // 错误
+  | 'agent_message'       // Agent 中间轮次完整消息
+  | 'tool_confirm_request' // 危险工具执行前的用户确认请求
 
 /** AI 流式响应块 */
 export interface AIStreamChunk {
@@ -46,6 +47,8 @@ export interface AIStreamChunk {
   /** agent_message 专用：中间轮次的完整 assistant 消息（含 toolCalls） */
   agentMessage?: ChatMessage
   error?: string
+  /** tool_confirm_request 专用：唯一确认请求 ID（用于匹配响应） */
+  confirmId?: string
 }
 
 /** 创建会话的请求载荷 */

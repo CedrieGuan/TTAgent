@@ -7,6 +7,7 @@ export const IPC_CHANNELS = {
   AI_SEND_MESSAGE: 'ai:send-message',
   AI_STREAM_CHUNK: 'ai:stream-chunk',
   AI_CANCEL_STREAM: 'ai:cancel-stream',
+  AI_TOOL_CONFIRM_RESPONSE: 'ai:tool-confirm-response',
 
   // 会话管理
   SESSION_LIST: 'session:list',
@@ -37,6 +38,14 @@ export const IPC_CHANNELS = {
   SKILL_DISCOVER: 'skill:discover',
   SKILL_LOAD: 'skill:load',
   SKILL_OPEN_DIR: 'skill:open-dir',
+
+  // 长期记忆
+  MEMORY_GET: 'memory:get',
+  MEMORY_DELETE: 'memory:delete',
+  MEMORY_CLEAR: 'memory:clear',
+  MEMORY_EVENT: 'memory:event',
+  MEMORY_GET_WORKSPACE_PATH: 'memory:get-workspace-path',
+  MEMORY_SET_WORKSPACE_PATH: 'memory:set-workspace-path',
 
   // 系统 / 窗口
   APP_VERSION: 'app:version',
