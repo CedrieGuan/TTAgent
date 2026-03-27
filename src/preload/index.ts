@@ -12,6 +12,7 @@ import type {
 import type { Session } from '../shared/types/session.types'
 import type { ChatMessage } from '../shared/types/ai.types'
 import type { MCPServerStatus, MCPTool } from '../shared/types/mcp.types'
+import type { AgentSkill } from '../shared/types/skill.types'
 
 const api = {
   // ── AI ──────────────────────────────────────────────────────
@@ -54,8 +55,7 @@ const api = {
   setConfig: (key: string, value: unknown): Promise<IPCResponse> =>
     ipcRenderer.invoke(IPC_CHANNELS.CONFIG_SET, key, value),
 
-  getAllConfig: (): Promise<IPCResponse> =>
-    ipcRenderer.invoke(IPC_CHANNELS.CONFIG_GET_ALL),
+  getAllConfig: (): Promise<IPCResponse> => ipcRenderer.invoke(IPC_CHANNELS.CONFIG_GET_ALL),
 
   deleteConfig: (key: string): Promise<IPCResponse> =>
     ipcRenderer.invoke(IPC_CHANNELS.CONFIG_DELETE, key),
@@ -75,6 +75,24 @@ const api = {
 
   disconnectMCPServer: (name: string): Promise<IPCResponse> =>
     ipcRenderer.invoke(IPC_CHANNELS.MCP_DISCONNECT_SERVER, name),
+
+  // ── Skills ────────────────────────────────────────────────────
+  listSkills: (): Promise<IPCResponse<AgentSkill[]>> => ipcRenderer.invoke(IPC_CHANNELS.SKILL_LIST),
+
+  createSkill: (
+    skill: Omit<AgentSkill, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<IPCResponse<AgentSkill>> => ipcRenderer.invoke(IPC_CHANNELS.SKILL_CREATE, skill),
+
+  updateSkill: (
+    id: string,
+    updates: Partial<Pick<AgentSkill, 'name' | 'description' | 'instructions'>>
+  ): Promise<IPCResponse<AgentSkill>> => ipcRenderer.invoke(IPC_CHANNELS.SKILL_UPDATE, id, updates),
+
+  deleteSkill: (id: string): Promise<IPCResponse> =>
+    ipcRenderer.invoke(IPC_CHANNELS.SKILL_DELETE, id),
+
+  toggleSkill: (id: string, enabled: boolean): Promise<IPCResponse<AgentSkill>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.SKILL_TOGGLE, id, enabled),
 
   // ── Window ───────────────────────────────────────────────────
   minimizeWindow: (): void => ipcRenderer.send(IPC_CHANNELS.WINDOW_MINIMIZE),

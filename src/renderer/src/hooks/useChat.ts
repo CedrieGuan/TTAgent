@@ -3,8 +3,10 @@ import { useChatStore } from '@stores/chat.store'
 import { useSessionStore } from '@stores/session.store'
 import { useSettingsStore } from '@stores/settings.store'
 import { useAgentStore } from '@stores/agent.store'
+import { useSkillStore } from '@stores/skill.store'
 import type { ChatMessage, Attachment } from '@shared/types/ai.types'
 import type { AIRequestPayload } from '@shared/types/ipc.types'
+import type { AgentSkill } from '@shared/types/skill.types'
 
 export function useChat() {
   const {
@@ -19,6 +21,7 @@ export function useChat() {
   const { currentSessionId, getCurrentSession } = useSessionStore()
   const { providers, agentSystemPrompt } = useSettingsStore()
   const { allTools, toolsEnabled } = useAgentStore()
+  const { getEnabledSkills } = useSkillStore()
 
   const messages = currentSessionId ? getMessages(currentSessionId) : []
   const isActiveSession = streamingSessionId === currentSessionId
@@ -61,7 +64,10 @@ export function useChat() {
         messages: allMessages,
         provider: session.provider,
         model: session.model,
-        systemPrompt: session.systemPrompt ?? agentSystemPrompt,
+        systemPrompt: buildSystemPrompt(
+          session.systemPrompt ?? agentSystemPrompt,
+          getEnabledSkills()
+        ),
         mcpTools: toolsEnabled && allTools.length > 0 ? allTools : undefined
       }
 
@@ -76,6 +82,7 @@ export function useChat() {
       agentSystemPrompt,
       allTools,
       toolsEnabled,
+      getEnabledSkills,
       addMessage,
       getMessages,
       startThinking
@@ -96,4 +103,12 @@ export function useChat() {
     sendMessage,
     cancelStream
   }
+}
+
+function buildSystemPrompt(basePrompt: string, enabledSkills: AgentSkill[]): string {
+  if (enabledSkills.length === 0) return basePrompt
+  const skillSections = enabledSkills.map(
+    (skill) => `## Skill: ${skill.name}\n${skill.instructions}`
+  )
+  return `${basePrompt}\n\n# Active Skills\n\n${skillSections.join('\n\n')}`
 }

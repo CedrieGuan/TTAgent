@@ -25,6 +25,13 @@ export const IPC_CHANNELS = {
   MCP_DISCONNECT_SERVER: 'mcp:disconnect-server',
   MCP_LIST_SERVERS: 'mcp:list-servers',
 
+  // Agent Skills
+  SKILL_LIST: 'skill:list',
+  SKILL_CREATE: 'skill:create',
+  SKILL_UPDATE: 'skill:update',
+  SKILL_DELETE: 'skill:delete',
+  SKILL_TOGGLE: 'skill:toggle',
+
   // 系统 / 窗口
   APP_VERSION: 'app:version',
   APP_CHECK_UPDATE: 'app:check-update',

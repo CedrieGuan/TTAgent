@@ -1,8 +1,10 @@
 import Store from 'electron-store'
 import type { ProviderConfig } from '@shared/types/ai.types'
 import type { MCPServerConfig } from '@shared/types/mcp.types'
+import type { AgentSkill } from '@shared/types/skill.types'
 import type { Session, SessionWithMessages } from '@shared/types/session.types'
 import { DEFAULT_PROVIDER, DEFAULT_MODEL } from '@shared/constants/providers'
+import { BUILT_IN_SKILLS } from '@shared/constants/builtin-skills'
 
 interface AppSettings {
   theme: 'dark' | 'light' | 'system'
@@ -18,6 +20,7 @@ interface StoreSchema {
   sessions: Session[]
   messages: Record<string, SessionWithMessages['messages']>
   agentSystemPrompt: string
+  agentSkills: AgentSkill[]
 }
 
 const store = new Store<StoreSchema>({
@@ -43,7 +46,8 @@ const store = new Store<StoreSchema>({
     mcpServers: [],
     sessions: [],
     messages: {},
-    agentSystemPrompt: 'You are a helpful AI assistant.'
+    agentSystemPrompt: 'You are a helpful AI assistant.',
+    agentSkills: BUILT_IN_SKILLS
   }
 })
 
