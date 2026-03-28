@@ -1,7 +1,9 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { Button } from '@components/ui/Button'
 import { useSettingsStore } from '@stores/settings.store'
+import { useSlashCommand } from '@hooks/useSlashCommand'
 import type { Attachment } from '@shared/types/ai.types'
+import type { SkillSummary } from '@shared/types/skill.types'
 
 interface InputAreaProps {
   onSend: (text: string, attachments?: Attachment[]) => void
@@ -15,11 +17,13 @@ export function InputArea({ onSend, onCancel, isStreaming, isThinking, disabled 
   const [value, setValue] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [isRecording, setIsRecording] = useState(false)
+  const [selectedIndex, setSelectedIndex] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const { settings } = useSettingsStore()
+  const { isActive: slashActive, candidates, selectSkill } = useSlashCommand(value)
 
   const isBusy = isStreaming || isThinking
 
@@ -34,7 +38,50 @@ export function InputArea({ onSend, onCancel, isStreaming, isThinking, disabled 
     onSend(text, attachments.length > 0 ? attachments : undefined)
   }, [value, attachments, isBusy, disabled, onSend])
 
+  // 当候选列表变化时重置选中索引
+  useEffect(() => {
+    setSelectedIndex(0)
+  }, [candidates.length, slashActive])
+
+  const handleSelectSkill = useCallback(
+    (skill: SkillSummary) => {
+      const newValue = selectSkill(skill)
+      setValue(newValue)
+      // 更新输入框高度
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto'
+        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`
+        textareaRef.current.focus()
+      }
+    },
+    [selectSkill]
+  )
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // 斜杠命令模式下，方向键和回车键用于候选列表导航
+    if (slashActive && candidates.length > 0) {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSelectedIndex((i) => (i <= 0 ? candidates.length - 1 : i - 1))
+        return
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSelectedIndex((i) => (i >= candidates.length - 1 ? 0 : i + 1))
+        return
+      }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        handleSelectSkill(candidates[selectedIndex])
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setValue('')
+        return
+      }
+    }
+
     if (settings.sendOnEnter) {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
@@ -198,6 +245,45 @@ export function InputArea({ onSend, onCancel, isStreaming, isThinking, disabled 
 
   return (
     <div className="border-t border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] p-4">
+      {/* 斜杠命令候选列表 */}
+      {slashActive && candidates.length > 0 && (
+        <div className="mb-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-lg overflow-hidden">
+          <div className="px-3 py-1.5 border-b border-[var(--color-border-subtle)]">
+            <span className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider">可用技能</span>
+          </div>
+          <ul className="max-h-48 overflow-y-auto py-1">
+            {candidates.map((skill, i) => (
+              <li key={skill.id}>
+                <button
+                  className={`w-full text-left px-3 py-2 flex items-start gap-2.5 transition-colors ${
+                    i === selectedIndex
+                      ? 'bg-[var(--color-accent)]/10 text-[var(--color-text-primary)]'
+                      : 'hover:bg-[var(--color-bg-surface-2)] text-[var(--color-text-secondary)]'
+                  }`}
+                  onMouseEnter={() => setSelectedIndex(i)}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    handleSelectSkill(skill)
+                  }}
+                >
+                  <span className={`mt-0.5 text-xs font-mono font-semibold shrink-0 ${i === selectedIndex ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)]'}`}>
+                    /{skill.name}
+                  </span>
+                  <span className="text-xs text-[var(--color-text-muted)] leading-relaxed truncate">
+                    {skill.description}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="px-3 py-1 border-t border-[var(--color-border-subtle)] flex gap-3">
+            <span className="text-[10px] text-[var(--color-text-muted)]">↑↓ 导航</span>
+            <span className="text-[10px] text-[var(--color-text-muted)]">↵ 选择</span>
+            <span className="text-[10px] text-[var(--color-text-muted)]">Esc 关闭</span>
+          </div>
+        </div>
+      )}
+
       {/* 附件预览区 */}
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-3">
