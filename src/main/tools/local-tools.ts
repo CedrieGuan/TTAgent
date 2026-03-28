@@ -9,6 +9,8 @@ import { execFile } from 'child_process'
 import { resolve, join, dirname } from 'path'
 import { homedir } from 'os'
 import type { MCPTool } from '@shared/types/mcp.types'
+import { taskManager } from '../task/task-manager'
+import { broadcastTaskEvent } from '../ipc/task.handler'
 
 /** 本地工具执行器接口 */
 export interface LocalToolExecutor {
@@ -202,12 +204,86 @@ const shellExecuteDef: LocalToolDefinition = {
   }
 }
 
+/** 在任务大厅创建新任务（AI 自动调用，非危险工具） */
+const createTaskDef: LocalToolDefinition = {
+  tool: {
+    name: localTool('create_task'),
+    description:
+      '在任务大厅中创建新任务。当用户提到需要完成某件事、记录待办项、或明确要求帮忙记录任务时调用。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: {
+          type: 'string',
+          description: '任务标题'
+        },
+        description: {
+          type: 'string',
+          description: '任务描述（可选）'
+        },
+        priority: {
+          type: 'string',
+          enum: ['urgent', 'normal', 'low'],
+          description: '优先级：urgent=紧急, normal=普通, low=低'
+        },
+        period: {
+          type: 'string',
+          enum: ['short', 'long'],
+          description: '周期：short=短期, long=长期'
+        },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '标签列表'
+        },
+        dueDate: {
+          type: 'string',
+          description: '截止日期（ISO 格式，可选）'
+        },
+        subtasks: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' }
+            },
+            required: ['title']
+          },
+          description: '初始子任务列表（可选）'
+        }
+      },
+      required: ['title']
+    }
+  },
+  executor: {
+    async execute(args) {
+      try {
+        const opts: Parameters<typeof taskManager.createTask>[0] = {
+          title: args.title as string,
+          description: args.description as string | undefined,
+          priority: args.priority as 'urgent' | 'normal' | 'low' | undefined,
+          period: args.period as 'short' | 'long' | undefined,
+          tags: args.tags as string[] | undefined,
+          dueDate: args.dueDate ? new Date(args.dueDate as string).getTime() : undefined,
+          subtasks: args.subtasks as { title: string }[] | undefined
+        }
+        const task = taskManager.createTask(opts)
+        broadcastTaskEvent({ type: 'created', task })
+        return `已创建任务「${task.title}」（ID: ${task.id}，优先级: ${task.priority}，周期: ${task.period}）`
+      } catch (err) {
+        return `创建任务失败: ${(err as Error).message}`
+      }
+    }
+  }
+}
+
 /** 所有本地工具定义列表 */
 const LOCAL_TOOLS: LocalToolDefinition[] = [
   readFileDef,
   writeFileDef,
   listDirectoryDef,
-  shellExecuteDef
+  shellExecuteDef,
+  createTaskDef
 ]
 
 /** 工具名称 -> 执行器的快速查找 Map */

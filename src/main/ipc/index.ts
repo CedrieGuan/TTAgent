@@ -10,6 +10,7 @@ import { registerWindowHandlers } from './window.handler'
 import { registerSkillHandlers } from './skill.handler'
 import { registerContextHandlers } from './context.handler'
 import { registerMemoryHandlers } from './memory.handler'
+import { registerTaskHandlers } from './task.handler'
 
 export function registerAllHandlers(): void {
   registerConfigHandlers()
@@ -20,4 +21,5 @@ export function registerAllHandlers(): void {
   registerSkillHandlers()
   registerContextHandlers()
   registerMemoryHandlers()
+  registerTaskHandlers()
 }

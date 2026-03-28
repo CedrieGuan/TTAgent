@@ -40,3 +40,6 @@ resources/entitlements.mac.plist
 # electron-builder 临时文件
 app-update.yml
 dev-app-update.yml
+
+# 本地计划文档
+plan/

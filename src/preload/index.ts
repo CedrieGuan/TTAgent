@@ -20,6 +20,7 @@ import type { MCPServerStatus, MCPTool } from '../shared/types/mcp.types'
 import type { Skill, SkillSummary } from '../shared/types/skill.types'
 import type { ContextEvent } from '../shared/types/context.types'
 import type { Memory, MemoryEvent } from '../shared/types/memory.types'
+import type { Task, TaskEvent } from '../shared/types/task.types'
 
 const api = {
   // ── AI 对话 ──────────────────────────────────────────────────
@@ -117,8 +118,7 @@ const api = {
     ipcRenderer.invoke(IPC_CHANNELS.SKILL_LOAD, id),
 
   /** 用系统文件管理器打开技能目录 */
-  openSkillDir: (): Promise<IPCResponse> =>
-    ipcRenderer.invoke(IPC_CHANNELS.SKILL_OPEN_DIR),
+  openSkillDir: (): Promise<IPCResponse> => ipcRenderer.invoke(IPC_CHANNELS.SKILL_OPEN_DIR),
 
   // ── 长期记忆 ──────────────────────────────────────────────────
   /** 获取全局和工作区记忆 */
@@ -155,10 +155,46 @@ const api = {
     return () => ipcRenderer.removeListener(IPC_CHANNELS.MEMORY_EVENT, listener)
   },
 
+  // ── 任务大厅 ──────────────────────────────────────────────────
+  listTasks: (): Promise<IPCResponse<Task[]>> => ipcRenderer.invoke(IPC_CHANNELS.TASK_LIST),
+
+  createTask: (opts: {
+    title: string
+    description?: string
+    priority?: 'urgent' | 'normal' | 'low'
+    period?: 'short' | 'long'
+    tags?: string[]
+    dueDate?: number
+    subtasks?: { title: string }[]
+  }): Promise<IPCResponse<Task>> => ipcRenderer.invoke(IPC_CHANNELS.TASK_CREATE, opts),
+
+  updateTask: (taskId: string, updates: Record<string, unknown>): Promise<IPCResponse<Task>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_UPDATE, taskId, updates),
+
+  deleteTask: (taskId: string): Promise<IPCResponse> =>
+    ipcRenderer.invoke(IPC_CHANNELS.TASK_DELETE, taskId),
+
+  onTaskEvent: (callback: (event: TaskEvent) => void): (() => void) => {
+    const listener = (_: Electron.IpcRendererEvent, event: TaskEvent) => callback(event)
+    ipcRenderer.on(IPC_CHANNELS.TASK_EVENT, listener)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.TASK_EVENT, listener)
+  },
+
   // ── 开发日志 ──────────────────────────────────────────────────
   /** 注册主进程日志推送监听（仅开发环境有效），返回清理函数 */
-  onLogEntry: (callback: (entry: { timestamp: number; level: string; scope: string; message: string; data?: string }) => void): (() => void) => {
-    const listener = (_: Electron.IpcRendererEvent, entry: unknown) => callback(entry as { timestamp: number; level: string; scope: string; message: string; data?: string })
+  onLogEntry: (
+    callback: (entry: {
+      timestamp: number
+      level: string
+      scope: string
+      message: string
+      data?: string
+    }) => void
+  ): (() => void) => {
+    const listener = (_: Electron.IpcRendererEvent, entry: unknown) =>
+      callback(
+        entry as { timestamp: number; level: string; scope: string; message: string; data?: string }
+      )
     ipcRenderer.on(IPC_CHANNELS.LOG_ENTRY, listener)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.LOG_ENTRY, listener)
   },

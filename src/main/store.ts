@@ -7,6 +7,7 @@ import Store from 'electron-store'
 import type { ProviderConfig } from '@shared/types/ai.types'
 import type { MCPServerConfig } from '@shared/types/mcp.types'
 import type { Session, SessionWithMessages } from '@shared/types/session.types'
+import type { Task } from '@shared/types/task.types'
 import { DEFAULT_PROVIDER, DEFAULT_MODEL } from '@shared/constants/providers'
 
 interface AppSettings {
@@ -27,6 +28,8 @@ interface StoreSchema {
   agentSystemPrompt: string
   /** 记忆工作区路径（空字符串表示未设置） */
   memoryWorkspacePath: string
+  /** 任务大厅数据 */
+  tasks: Task[]
 }
 
 const store = new Store<StoreSchema>({
@@ -53,10 +56,10 @@ const store = new Store<StoreSchema>({
     sessions: [],
     messages: {},
     agentSystemPrompt: 'You are a helpful AI assistant.',
-    memoryWorkspacePath: ''
+    memoryWorkspacePath: '',
+    tasks: []
   }
 })
 
 export { store }
 export type { AppSettings, StoreSchema }
-

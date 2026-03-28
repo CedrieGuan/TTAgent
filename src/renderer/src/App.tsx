@@ -11,6 +11,7 @@ import { useTheme } from '@hooks/useTheme'
 import { useSettingsStore } from '@stores/settings.store'
 import { useSessionStore } from '@stores/session.store'
 import { useSkillStore } from '@stores/skill.store'
+import { useTaskStore } from '@stores/task.store'
 
 type NavPage = 'tasks' | 'skills' | 'mcp' | 'memory' | 'history' | 'settings'
 
@@ -20,6 +21,7 @@ export default function App() {
   const { loadSettings } = useSettingsStore()
   const { loadSessions } = useSessionStore()
   const { discoverSkills } = useSkillStore()
+  const { loadTasks, handleTaskEvent } = useTaskStore()
 
   useStream()
   useTheme()
@@ -28,7 +30,13 @@ export default function App() {
     loadSettings()
     loadSessions()
     discoverSkills()
-  }, [loadSettings, loadSessions, discoverSkills])
+    loadTasks()
+  }, [loadSettings, loadSessions, discoverSkills, loadTasks])
+
+  useEffect(() => {
+    const cleanup = window.api.onTaskEvent(handleTaskEvent)
+    return cleanup
+  }, [handleTaskEvent])
 
   const renderPage = () => {
     switch (navPage) {

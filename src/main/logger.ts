@@ -136,7 +136,8 @@ export const logger = {
   ipc: log.scope('ipc'),
   tool: log.scope('tool'),
   skill: log.scope('skill'),
-  context: log.scope('context')
+  context: log.scope('context'),
+  task: log.scope('task')
 }
 
 export default log
