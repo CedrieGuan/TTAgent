@@ -4,15 +4,15 @@ import { Button } from '@components/ui/Button'
 import { formatTime } from '@lib/utils'
 
 interface HistoryPageProps {
-  onNavigateToChat: () => void
+  onOpenSession: () => void
 }
 
-export function HistoryPage({ onNavigateToChat }: HistoryPageProps) {
+export function HistoryPage({ onOpenSession }: HistoryPageProps) {
   const { sessions, selectSession, deleteSession } = useSessionStore()
 
   const handleOpen = (id: string) => {
     selectSession(id)
-    onNavigateToChat()
+    onOpenSession()
   }
 
   return (

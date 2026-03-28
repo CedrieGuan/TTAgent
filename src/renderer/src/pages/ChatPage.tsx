@@ -96,7 +96,7 @@ export function ChatPage() {
   if (!currentSessionId) {
     return (
       <div className="flex flex-1 items-center justify-center text-[var(--color-text-muted)] text-sm">
-        请在左侧创建或选择一个对话
+        请在上方创建或选择一个对话
       </div>
     )
   }
@@ -196,9 +196,7 @@ export function ChatPage() {
         contextEvents={currentSessionId ? (contextEventsBySession[currentSessionId] ?? []) : []}
         memoryEvents={currentSessionId ? (memoryEventsBySession[currentSessionId] ?? []) : []}
         sessionId={currentSessionId}
-        pendingConfirms={
-          currentSessionId ? (pendingConfirmsBySession[currentSessionId] ?? []) : []
-        }
+        pendingConfirms={currentSessionId ? (pendingConfirmsBySession[currentSessionId] ?? []) : []}
         onConfirmRespond={handleConfirmRespond}
       />
 

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { Button } from '@components/ui/Button'
 import { useSettingsStore } from '@stores/settings.store'
+import { useSlashCommand } from '@hooks/useSlashCommand'
 import type { Attachment } from '@shared/types/ai.types'
 
 interface InputAreaProps {
@@ -15,13 +16,20 @@ export function InputArea({ onSend, onCancel, isStreaming, isThinking, disabled 
   const [value, setValue] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [isRecording, setIsRecording] = useState(false)
+  const [selectedIndex, setSelectedIndex] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const { settings } = useSettingsStore()
+  const { isActive: slashActive, candidates, selectSkill } = useSlashCommand(value)
 
   const isBusy = isStreaming || isThinking
+
+  // 候选列表变化时重置选中索引
+  useEffect(() => {
+    setSelectedIndex(0)
+  }, [candidates.length])
 
   const handleSend = useCallback(() => {
     const text = value.trim()
@@ -35,6 +43,39 @@ export function InputArea({ onSend, onCancel, isStreaming, isThinking, disabled 
   }, [value, attachments, isBusy, disabled, onSend])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // 斜杠命令候选列表键盘导航
+    if (slashActive && candidates.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSelectedIndex((i) => (i + 1) % candidates.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSelectedIndex((i) => (i - 1 + candidates.length) % candidates.length)
+        return
+      }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        const skill = candidates[selectedIndex]
+        if (skill) {
+          const newVal = selectSkill(skill)
+          setValue(newVal)
+          if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto'
+            textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`
+            textareaRef.current.focus()
+          }
+        }
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setValue('')
+        return
+      }
+    }
+
     if (settings.sendOnEnter) {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault()
@@ -198,6 +239,38 @@ export function InputArea({ onSend, onCancel, isStreaming, isThinking, disabled 
 
   return (
     <div className="border-t border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)] p-4">
+      {/* 斜杠命令候选列表 */}
+      {slashActive && candidates.length > 0 && (
+        <div className="mb-2 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-md" style={{ maxHeight: '12rem' }}>
+          {candidates.map((skill, i) => (
+            <button
+              key={skill.id}
+              className={`no-drag flex w-full items-start gap-2 px-3 py-2 text-left transition-colors
+                ${i === selectedIndex
+                  ? 'bg-[var(--color-accent-subtle)] text-[var(--color-text-primary)]'
+                  : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)]'
+                }`}
+              onMouseEnter={() => setSelectedIndex(i)}
+              onMouseDown={(e) => {
+                e.preventDefault()
+                const newVal = selectSkill(skill)
+                setValue(newVal)
+                if (textareaRef.current) {
+                  textareaRef.current.style.height = 'auto'
+                  textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`
+                  textareaRef.current.focus()
+                }
+              }}
+            >
+              <span className="shrink-0 text-xs font-medium text-[var(--color-accent)]">/{skill.name}</span>
+              {skill.description && (
+                <span className="truncate text-xs text-[var(--color-text-muted)]">{skill.description}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* 附件预览区 */}
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-2 mb-3">
