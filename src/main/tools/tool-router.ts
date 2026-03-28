@@ -4,6 +4,7 @@
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { getLocalToolExecutor, isLocalTool, getLocalTools } from './local-tools'
+import { logger } from '../logger'
 import type { MCPTool } from '@shared/types/mcp.types'
 
 /** 工具调用结果 */
@@ -75,8 +76,8 @@ export class ToolRouter {
                 : JSON.stringify(result.content)
           return { output: textContent, isError: result.isError === true }
         }
-      } catch {
-        continue
+      } catch (err) {
+        logger.tool.warn(`MCP工具 ${name} 调用失败:`, err instanceof Error ? err.message : String(err))
       }
     }
     return { output: `No MCP server found for tool: ${name}`, isError: true }

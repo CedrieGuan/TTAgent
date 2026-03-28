@@ -3,6 +3,7 @@
  * 处理手动触发的上下文压缩请求
  */
 import { ipcMain } from 'electron'
+import { logger } from '../logger'
 import { IPC_CHANNELS } from '@shared/constants/ipc.channels'
 import type { IPCResponse } from '@shared/types/ipc.types'
 import type { ChatMessage } from '@shared/types/ai.types'
@@ -78,6 +79,7 @@ export function registerContextHandlers(): void {
 
         return { success: true, data: { wasManaged: ctxResult.wasManaged } }
       } catch (err: unknown) {
+        logger.context.error('上下文压缩失败:', err)
         const error = err instanceof Error ? err.message : String(err)
         return { success: false, error }
       }

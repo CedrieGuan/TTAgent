@@ -8,6 +8,7 @@ import * as path from 'path'
 import * as fs from 'fs'
 import matter from 'gray-matter'
 import type { Skill, SkillSummary, SkillMeta } from '@shared/types/skill.types'
+import { logger } from '../logger'
 
 /** 返回全局技能根目录路径（userData/skills/） */
 export function getSkillsDir(): string {
@@ -59,7 +60,7 @@ export function discoverSkills(): SkillSummary[] {
         filePath: skillFile
       })
     } catch (err) {
-      console.warn(`解析技能 ${entry.name}/SKILL.md 失败:`, err)
+      logger.skill.warn(`解析技能 ${entry.name}/SKILL.md 失败:`, err)
     }
   }
 
@@ -94,7 +95,7 @@ export function loadSkill(skillId: string): Skill | null {
       supportingFiles
     }
   } catch (err) {
-    console.error(`加载技能 ${skillId} 失败:`, err)
+    logger.skill.error(`加载技能 ${skillId} 失败:`, err)
     return null
   }
 }

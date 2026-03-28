@@ -5,6 +5,7 @@
  */
 import { ipcMain, shell } from 'electron'
 import { IPC_CHANNELS } from '@shared/constants/ipc.channels'
+import { logger } from '../logger'
 import type { IPCResponse } from '@shared/types/ipc.types'
 import type { Skill, SkillSummary } from '@shared/types/skill.types'
 import {
@@ -13,6 +14,7 @@ import {
   ensureSkillsDir,
   ensureExampleSkill
 } from '../lib/skill-parser'
+
 
 export function registerSkillHandlers(): void {
   // 首次注册时确保技能目录存在，并创建示例技能
@@ -42,6 +44,7 @@ export function registerSkillHandlers(): void {
         if (!skill) return { success: false, error: `技能 "${skillId}" 未找到` }
         return { success: true, data: skill }
       } catch (err) {
+        logger.skill.error('加载技能失败:', skillId, err)
         const error = err instanceof Error ? err.message : String(err)
         return { success: false, error }
       }

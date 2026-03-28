@@ -5,6 +5,7 @@
  */
 import { ipcMain } from 'electron'
 import { store } from '../store'
+import { logger } from '../logger'
 import { IPC_CHANNELS } from '@shared/constants/ipc.channels'
 import type { IPCResponse } from '@shared/types/ipc.types'
 
@@ -15,6 +16,7 @@ export function registerConfigHandlers(): void {
       const value = store.get(key as never)
       return { success: true, data: value }
     } catch (err) {
+      logger.ipc.error('读取配置失败:', err)
       return { success: false, error: String(err) }
     }
   })
@@ -27,6 +29,7 @@ export function registerConfigHandlers(): void {
         store.set(key as never, value as never)
         return { success: true }
       } catch (err) {
+        logger.ipc.error('写入配置失败:', err)
         return { success: false, error: String(err) }
       }
     }
@@ -37,6 +40,7 @@ export function registerConfigHandlers(): void {
     try {
       return { success: true, data: store.store }
     } catch (err) {
+      logger.ipc.error('读取全部配置失败:', err)
       return { success: false, error: String(err) }
     }
   })
@@ -47,6 +51,7 @@ export function registerConfigHandlers(): void {
       store.delete(key as never)
       return { success: true }
     } catch (err) {
+      logger.ipc.error('删除配置失败:', err)
       return { success: false, error: String(err) }
     }
   })

@@ -1,6 +1,8 @@
+/// <reference types="vite/client" />
 import React from 'react'
 import { Titlebar } from './Titlebar'
 import { Sidebar } from './Sidebar'
+import { LogViewer } from '@components/dev/LogViewer'
 
 type Page = 'chat' | 'history' | 'settings' | 'agent-config'
 
@@ -14,10 +16,11 @@ export function MainLayout({ currentPage, onNavigate, children }: MainLayoutProp
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[var(--color-bg-base)]">
       <Titlebar />
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden min-h-0">
         <Sidebar currentPage={currentPage} onNavigate={onNavigate} />
         <main className="flex flex-1 flex-col overflow-hidden">{children}</main>
       </div>
+      {import.meta.env.DEV && <LogViewer />}
     </div>
   )
 }

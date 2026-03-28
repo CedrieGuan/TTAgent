@@ -47,6 +47,11 @@ export const IPC_CHANNELS = {
   MEMORY_GET_WORKSPACE_PATH: 'memory:get-workspace-path',
   MEMORY_SET_WORKSPACE_PATH: 'memory:set-workspace-path',
 
+  // 开发日志（主进程 → 渲染进程实时推送）
+  LOG_ENTRY: 'log:entry',
+  LOG_GET_BUFFER: 'log:get-buffer',
+  LOG_CLEAR_BUFFER: 'log:clear-buffer',
+
   // 系统 / 窗口
   APP_VERSION: 'app:version',
   APP_CHECK_UPDATE: 'app:check-update',

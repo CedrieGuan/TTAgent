@@ -6,6 +6,10 @@ import { app, BrowserWindow } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { createMainWindow } from './window'
 import { registerAllHandlers } from './ipc'
+import { initLogger, logger } from './logger'
+
+// 初始化日志系统（必须在 app.whenReady 之前调用，以拦截 console 方法）
+initLogger()
 
 // 单实例锁定：防止用户重复启动多个应用实例
 const gotLock = app.requestSingleInstanceLock()
@@ -16,13 +20,12 @@ if (!gotLock) {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.ttagent.app')
+  logger.main.info('TTAgent 应用启动')
 
-  // 开发环境快捷键（F12 打开 DevTools，F5 刷新）
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // 注册所有 IPC handlers
   registerAllHandlers()
 
   createMainWindow()

@@ -3,6 +3,7 @@ import { MessageList } from '@components/chat/MessageList'
 import { InputArea } from '@components/chat/InputArea'
 import { useChat } from '@hooks/useChat'
 import { useChatStore } from '@stores/chat.store'
+import { pushLog } from '@stores/log.store'
 import { useSessionStore } from '@stores/session.store'
 import { useAgentStore } from '@stores/agent.store'
 import { useMemoryStore } from '@stores/memory.store'
@@ -36,7 +37,7 @@ export function ChatPage() {
 
   useEffect(() => {
     if (!memoryLoaded) {
-      loadMemories().catch(console.error)
+      loadMemories().catch((err) => pushLog('error', 'memory', String(err)))
     }
   }, [memoryLoaded, loadMemories])
 

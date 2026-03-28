@@ -15,6 +15,7 @@ import OpenAI from 'openai'
 import { store } from '../store'
 import { ZHIPUAI_BASE_URL } from '@shared/constants/providers'
 import { IPC_CHANNELS } from '@shared/constants/ipc.channels'
+import { logger } from '../logger'
 import type {
   Memory,
   MemoryFile,
@@ -227,7 +228,7 @@ export class MemoryManager {
         addedCount: totalAdded
       })
     } catch (err) {
-      console.error('[MemoryManager] 记忆提取失败:', err)
+      logger.memory.error('记忆提取失败:', err)
       emitEvent({
         type: 'memory_extraction_failed',
         sessionId,

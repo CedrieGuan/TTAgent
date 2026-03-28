@@ -6,6 +6,7 @@
 import { useEffect } from 'react'
 import { useChatStore } from '@stores/chat.store'
 import { useMemoryStore } from '@stores/memory.store'
+import { pushLog } from '@stores/log.store'
 import type { AIStreamChunk } from '@shared/types/ipc.types'
 import type { MCPToolCall } from '@shared/types/ai.types'
 import type { ContextEvent } from '@shared/types/context.types'
@@ -92,7 +93,7 @@ export function useStream(): void {
             clearPendingConfirms(chunk.sessionId)
             finalizeStream(chunk.sessionId)
           }
-          console.error('[Stream Error]', chunk.error)
+          pushLog('error', 'stream', chunk.error ? String(chunk.error) : '未知流错误')
           break
       }
     })
@@ -119,12 +120,21 @@ export function useStream(): void {
   }, [addContextEvent])
 
   useEffect(() => {
+    // 注册主进程日志推送监听（开发环境下将日志写入渲染进程日志面板）
+    if (!window.api.onLogEntry) return
+    const cleanup = window.api.onLogEntry((entry) => {
+      pushLog(entry.level as 'debug' | 'info' | 'warn' | 'error', entry.scope, entry.message)
+    })
+    return cleanup
+  }, [])
+
+  useEffect(() => {
     // 注册记忆事件监听：提取完成后同步更新记忆列表
     const cleanup = window.api.onMemoryEvent((event: MemoryEvent) => {
       addMemoryEvent(event.sessionId, event)
       // 提取完成且有新记忆时，刷新本地记忆缓存
       if (event.type === 'memory_extraction_completed' && (event.addedCount ?? 0) > 0) {
-        refreshMemories().catch(console.error)
+        refreshMemories().catch((err) => pushLog('error', 'memory', String(err)))
       }
     })
 

@@ -23,6 +23,7 @@ import { manageContext, applyMidLoopCheck } from '../lib/context-strategy'
 import { emitContextEvent, createEvent } from '../lib/context-events'
 import { countMessagesTokens, calculateBudget } from '../lib/token-counter'
 import { memoryManager } from '../memory/memory-manager'
+import { logger } from '../logger'
 
 /** 活跃的流式请求 AbortController（sessionId -> controller） */
 const activeStreams = new Map<string, AbortController>()
@@ -252,7 +253,7 @@ export function registerAIHandlers(): void {
               workspacePath,
               sender: sender.isDestroyed() ? undefined : sender
             })
-            .catch((err) => console.error('[AI] 记忆提取异常:', err))
+            .catch((err) => logger.ai.error('记忆提取异常:', err))
         }
       }
     }

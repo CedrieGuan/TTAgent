@@ -6,6 +6,7 @@ import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '@shared/constants/ipc.channels'
 import { store } from '../store'
 import { memoryManager } from '../memory/memory-manager'
+import { logger } from '../logger'
 import type { IPCResponse } from '@shared/types/ipc.types'
 import type { Memory } from '@shared/types/memory.types'
 
@@ -22,6 +23,7 @@ export function registerMemoryHandlers(): void {
         const workspace = workspacePath ? memoryManager.getWorkspaceMemories(workspacePath) : []
         return { success: true, data: { global, workspace } }
       } catch (err) {
+        logger.memory.error('获取记忆失败:', err)
         return { success: false, error: String(err) }
       }
     }
@@ -55,10 +57,7 @@ export function registerMemoryHandlers(): void {
    */
   ipcMain.handle(
     IPC_CHANNELS.MEMORY_CLEAR,
-    (
-      _event,
-      payload: { scope: 'global' | 'workspace'; workspacePath?: string }
-    ): IPCResponse => {
+    (_event, payload: { scope: 'global' | 'workspace'; workspacePath?: string }): IPCResponse => {
       try {
         if (payload.scope === 'global') {
           memoryManager.clearGlobalMemories()

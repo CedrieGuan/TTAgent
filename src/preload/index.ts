@@ -155,6 +155,14 @@ const api = {
     return () => ipcRenderer.removeListener(IPC_CHANNELS.MEMORY_EVENT, listener)
   },
 
+  // ── 开发日志 ──────────────────────────────────────────────────
+  /** 注册主进程日志推送监听（仅开发环境有效），返回清理函数 */
+  onLogEntry: (callback: (entry: { timestamp: number; level: string; scope: string; message: string; data?: string }) => void): (() => void) => {
+    const listener = (_: Electron.IpcRendererEvent, entry: unknown) => callback(entry as { timestamp: number; level: string; scope: string; message: string; data?: string })
+    ipcRenderer.on(IPC_CHANNELS.LOG_ENTRY, listener)
+    return () => ipcRenderer.removeListener(IPC_CHANNELS.LOG_ENTRY, listener)
+  },
+
   // ── 窗口控制 ──────────────────────────────────────────────────
   minimizeWindow: (): void => ipcRenderer.send(IPC_CHANNELS.WINDOW_MINIMIZE),
   maximizeWindow: (): void => ipcRenderer.send(IPC_CHANNELS.WINDOW_MAXIMIZE),

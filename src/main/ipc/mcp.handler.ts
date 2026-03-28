@@ -7,6 +7,7 @@ import { ipcMain } from 'electron'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { store } from '../store'
+import { logger } from '../logger'
 import { IPC_CHANNELS } from '@shared/constants/ipc.channels'
 import type { IPCResponse, MCPCallToolPayload, MCPConnectPayload } from '@shared/types/ipc.types'
 import type { MCPServerStatus, MCPTool } from '@shared/types/mcp.types'
@@ -36,8 +37,9 @@ export function registerMCPHandlers(): void {
       try {
         const result = await client.listTools()
         allTools.push(...(result.tools as MCPTool[]))
-      } catch {
-        // 跳过断开的服务器，继续处理其他服务器
+      } catch (err) {
+        logger.mcp.warn('列出MCP工具失败:', err instanceof Error ? err.message : String(err))
+        continue
       }
     }
     return { success: true, data: allTools }
@@ -48,7 +50,6 @@ export function registerMCPHandlers(): void {
     IPC_CHANNELS.MCP_CONNECT_SERVER,
     async (_event, payload: MCPConnectPayload): Promise<IPCResponse> => {
       try {
-        // 若已有同名连接，先关闭
         if (mcpClients.has(payload.name)) {
           await mcpClients.get(payload.name)!.close()
           mcpClients.delete(payload.name)
@@ -64,7 +65,6 @@ export function registerMCPHandlers(): void {
         await client.connect(transport)
         mcpClients.set(payload.name, client)
 
-        // 持久化服务器配置（更新已有配置或追加新配置）
         const servers = store.get('mcpServers') ?? []
         const existing = servers.findIndex((s) => s.name === payload.name)
         const config = {
@@ -77,9 +77,10 @@ export function registerMCPHandlers(): void {
         if (existing >= 0) servers[existing] = config
         else servers.push(config)
         store.set('mcpServers', servers)
-
+        logger.mcp.info('MCP服务器已连接:', payload.name)
         return { success: true }
       } catch (err) {
+        logger.mcp.error('连接MCP服务器失败:', payload.name, err)
         return { success: false, error: String(err) }
       }
     }
@@ -92,8 +93,10 @@ export function registerMCPHandlers(): void {
       try {
         await mcpClients.get(name)?.close()
         mcpClients.delete(name)
+        logger.mcp.info('MCP服务器已断开:', name)
         return { success: true }
       } catch (err) {
+        logger.mcp.error('断开MCP服务器失败:', name, err)
         return { success: false, error: String(err) }
       }
     }
@@ -110,6 +113,7 @@ export function registerMCPHandlers(): void {
         const result = await client.callTool({ name: payload.name, arguments: payload.args })
         return { success: true, data: result }
       } catch (err) {
+        logger.mcp.error('调用MCP工具失败:', payload.name, err)
         return { success: false, error: String(err) }
       }
     }
