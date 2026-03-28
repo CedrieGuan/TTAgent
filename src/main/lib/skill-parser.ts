@@ -1,7 +1,12 @@
 /**
  * SKILL.md 解析与发现模块
  * 负责在文件系统中扫描 SKILL.md 文件、解析 YAML frontmatter 和 markdown 正文
- * 技能存放在 app userData 目录下的 skills/ 子目录中
+ *
+ * 扫描两个来源（按优先级：项目内优先，userData 补充）：
+ *   1. 项目内 skills/ 目录（随代码版本管理，可 git 提交）
+ *      - 开发模式：<项目根目录>/skills/
+ *      - 打包后：<resources>/skills/
+ *   2. userData/skills/ 目录（用户自建技能，不进 git）
  */
 import { app } from 'electron'
 import * as path from 'path'
@@ -9,12 +14,25 @@ import * as fs from 'fs'
 import matter from 'gray-matter'
 import type { Skill, SkillSummary, SkillMeta } from '@shared/types/skill.types'
 
-/** 返回全局技能根目录路径（userData/skills/） */
+/**
+ * 返回项目内置技能目录路径
+ * 开发模式下为项目根目录的 skills/，打包后为 resources/skills/
+ */
+function getBundledSkillsDir(): string {
+  if (!app.isPackaged) {
+    // 开发模式：src/main/lib/ → 上三级为项目根
+    return path.join(__dirname, '..', '..', '..', 'skills')
+  }
+  // 打包后：resources/skills/
+  return path.join(process.resourcesPath, 'skills')
+}
+
+/** 返回用户自建技能根目录路径（userData/skills/） */
 export function getSkillsDir(): string {
   return path.join(app.getPath('userData'), 'skills')
 }
 
-/** 确保技能根目录存在，不存在则递归创建 */
+/** 确保用户技能根目录存在，不存在则递归创建 */
 export function ensureSkillsDir(): string {
   const dir = getSkillsDir()
   if (!fs.existsSync(dir)) {
@@ -24,57 +42,85 @@ export function ensureSkillsDir(): string {
 }
 
 /**
- * 扫描技能根目录，发现所有包含 SKILL.md 的子目录
+ * 返回所有需要扫描的技能目录（项目内置 + 用户自建）
+ * 项目内置目录优先，重名时用户目录中的技能会覆盖内置技能
+ */
+function getAllSkillsDirs(): string[] {
+  const dirs: string[] = []
+  const bundledDir = getBundledSkillsDir()
+  if (fs.existsSync(bundledDir)) dirs.push(bundledDir)
+  const userDir = ensureSkillsDir()
+  if (fs.existsSync(userDir)) dirs.push(userDir)
+  return dirs
+}
+
+/**
+ * 扫描所有技能目录（项目内置 + 用户自建），发现所有包含 SKILL.md 的子目录
  * 返回技能摘要列表（仅 name + description），用于渐进式加载的第一步
+ * 用户目录中同名技能会覆盖内置技能（后扫描的覆盖先扫描的）
  */
 export function discoverSkills(): SkillSummary[] {
-  const skillsDir = ensureSkillsDir()
-  const summaries: SkillSummary[] = []
+  const skillsDirs = getAllSkillsDirs()
+  // 用 Map 去重：相同 id 的技能，后扫描（用户目录）覆盖先扫描（内置目录）
+  const summaryMap = new Map<string, SkillSummary>()
 
-  let entries: fs.Dirent[]
-  try {
-    entries = fs.readdirSync(skillsDir, { withFileTypes: true })
-  } catch {
-    return []
-  }
-
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue
-
-    const skillDir = path.join(skillsDir, entry.name)
-    const skillFile = path.join(skillDir, 'SKILL.md')
-
-    if (!fs.existsSync(skillFile)) continue
-
+  for (const skillsDir of skillsDirs) {
+    let entries: fs.Dirent[]
     try {
-      const raw = fs.readFileSync(skillFile, 'utf-8')
-      const parsed = matter(raw)
-      const meta = parseMeta(parsed.data, entry.name)
+      entries = fs.readdirSync(skillsDir, { withFileTypes: true })
+    } catch {
+      continue
+    }
 
-      summaries.push({
-        id: entry.name,
-        name: meta.name,
-        description: meta.description,
-        disableModelInvocation: meta.disableModelInvocation ?? false,
-        filePath: skillFile
-      })
-    } catch (err) {
-      console.warn(`解析技能 ${entry.name}/SKILL.md 失败:`, err)
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+
+      const skillDir = path.join(skillsDir, entry.name)
+      const skillFile = path.join(skillDir, 'SKILL.md')
+
+      if (!fs.existsSync(skillFile)) continue
+
+      try {
+        const raw = fs.readFileSync(skillFile, 'utf-8')
+        const parsed = matter(raw)
+        const meta = parseMeta(parsed.data, entry.name)
+
+        summaryMap.set(entry.name, {
+          id: entry.name,
+          name: meta.name,
+          description: meta.description,
+          disableModelInvocation: meta.disableModelInvocation ?? false,
+          filePath: skillFile
+        })
+      } catch (err) {
+        console.warn(`解析技能 ${entry.name}/SKILL.md 失败:`, err)
+      }
     }
   }
 
-  return summaries
+  return Array.from(summaryMap.values())
 }
 
 /**
  * 加载指定技能的完整数据（含 markdown 正文指令和辅助文件列表）
  * 用于渐进式加载的第二步：用户触发或 AI 匹配时按需加载
+ * 优先从用户目录加载（后者可覆盖内置技能）
  */
 export function loadSkill(skillId: string): Skill | null {
-  const skillsDir = getSkillsDir()
-  const skillDir = path.join(skillsDir, skillId)
-  const skillFile = path.join(skillDir, 'SKILL.md')
+  // 逆序查找：用户目录优先（排在 getAllSkillsDirs 后面）
+  const skillsDirs = getAllSkillsDirs().reverse()
+  let skillDir: string | null = null
+  for (const dir of skillsDirs) {
+    const candidate = path.join(dir, skillId)
+    if (fs.existsSync(path.join(candidate, 'SKILL.md'))) {
+      skillDir = candidate
+      break
+    }
+  }
 
+  if (!skillDir) return null
+
+  const skillFile = path.join(skillDir, 'SKILL.md')
   if (!fs.existsSync(skillFile)) return null
 
   try {
@@ -82,8 +128,8 @@ export function loadSkill(skillId: string): Skill | null {
     const parsed = matter(raw)
     const meta = parseMeta(parsed.data, skillId)
 
-    // 列出技能目录中 SKILL.md 以外的辅助文件
-    const supportingFiles = listSupportingFiles(skillDir)
+    // 列出技能目录中 SKILL.md 以外的辅助文件（skillDir 已在上方确认非 null）
+    const supportingFiles = listSupportingFiles(skillDir as string)
 
     return {
       id: skillId,
