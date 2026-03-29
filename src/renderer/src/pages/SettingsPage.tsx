@@ -108,6 +108,13 @@ export function SettingsPage() {
             通用
           </h2>
           <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-[var(--color-text-primary)]">主题</span>
+              <ThemeSelector
+                value={settings.theme}
+                onChange={(v) => updateSettings({ theme: v })}
+              />
+            </div>
             <label className="flex items-center justify-between">
               <span className="text-sm text-[var(--color-text-primary)]">Enter 键发送消息</span>
               <Toggle
@@ -169,5 +176,32 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
           ${checked ? 'translate-x-[18px]' : 'translate-x-0'}`}
       />
     </button>
+  )
+}
+
+type Theme = 'light' | 'dark' | 'system'
+
+function ThemeSelector({ value, onChange }: { value: Theme; onChange: (v: Theme) => void }) {
+  const options: { value: Theme; label: string }[] = [
+    { value: 'light', label: '浅色' },
+    { value: 'dark', label: '深色' },
+    { value: 'system', label: '跟随系统' }
+  ]
+  return (
+    <div className="flex rounded-lg border border-[var(--color-border)] overflow-hidden no-drag">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          onClick={() => onChange(opt.value)}
+          className={`px-3 py-1 text-sm transition-colors duration-150
+            ${value === opt.value
+              ? 'bg-[var(--color-accent)] text-white'
+              : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)]'
+            }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
   )
 }

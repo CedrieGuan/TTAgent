@@ -16,7 +16,7 @@ import { useTaskStore } from '@stores/task.store'
 type NavPage = 'tasks' | 'skills' | 'mcp' | 'memory' | 'history' | 'settings'
 
 export default function App() {
-  const [navPage, setNavPage] = useState<NavPage>('skills')
+  const [navPage, setNavPage] = useState<NavPage>('tasks')
   const [chatPanelOpen, setChatPanelOpen] = useState(true)
   const { loadSettings } = useSettingsStore()
   const { loadSessions } = useSessionStore()

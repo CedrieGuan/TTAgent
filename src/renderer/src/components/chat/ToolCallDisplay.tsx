@@ -23,7 +23,7 @@ export function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
   }[toolCall.status]
 
   return (
-    <div className="my-2 mx-6 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-2)] overflow-hidden">
+    <div className="my-2 mx-6 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-surface-2)] overflow-hidden min-w-0">
       <button
         className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[var(--color-bg-hover)] transition-colors"
         onClick={() => setExpanded((v) => !v)}
@@ -39,14 +39,14 @@ export function ToolCallDisplay({ toolCall }: ToolCallDisplayProps) {
         <div className="border-t border-[var(--color-border)] px-3 py-2 space-y-2">
           <div>
             <p className="text-[10px] uppercase tracking-wide text-[var(--color-text-muted)] mb-1">输入</p>
-            <pre className="text-xs text-[var(--color-text-secondary)] font-mono overflow-x-auto">
+            <pre className="text-xs text-[var(--color-text-secondary)] font-mono whitespace-pre-wrap break-all">
               {JSON.stringify(toolCall.input, null, 2)}
             </pre>
           </div>
           {toolCall.result && (
             <div>
               <p className="text-[10px] uppercase tracking-wide text-[var(--color-text-muted)] mb-1">输出</p>
-              <pre className="text-xs text-[var(--color-text-secondary)] font-mono overflow-x-auto">
+              <pre className="text-xs text-[var(--color-text-secondary)] font-mono whitespace-pre-wrap break-all">
                 {toolCall.result}
               </pre>
             </div>

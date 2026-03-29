@@ -21,9 +21,10 @@ export function createMainWindow(): BrowserWindow {
     minWidth: 860,
     minHeight: 600,
     show: false,
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'hidden',
-    trafficLightPosition: { x: 16, y: 16 },
-    backgroundColor: '#0f0f0f',
+    title: '',
+    titleBarStyle: 'hidden',
+    trafficLightPosition: { x: 16, y: 13 },
+    backgroundColor: '#f5f5f7',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,

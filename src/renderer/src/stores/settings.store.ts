@@ -29,7 +29,7 @@ interface SettingsState {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
-  theme: 'dark',
+  theme: 'light',
   language: 'zh',
   fontSize: 14,
   sendOnEnter: true

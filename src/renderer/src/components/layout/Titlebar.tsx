@@ -6,42 +6,59 @@ interface TitlebarProps {
 
 const isMac = navigator.userAgent.includes('Mac')
 
+const TITLEBAR_HEIGHT = 52
+
 export function Titlebar({ title = 'TTAgent' }: TitlebarProps) {
   return (
     <div
-      className="drag-region flex h-11 shrink-0 items-center border-b border-[var(--color-border-subtle)]"
-      style={{ background: 'var(--color-bg-base)' }}
+      className="drag-region shrink-0 border-b border-[var(--color-border-subtle)] w-full"
+      style={{
+        background: 'var(--color-bg-base)',
+        height: TITLEBAR_HEIGHT,
+        display: 'flex',
+        alignItems: 'center',
+        position: 'relative',
+        width: '100%'
+      }}
     >
-      {/* macOS 交通灯按钮占位（系统自己渲染，留出空间） */}
-      {isMac && <div className="w-20 shrink-0" />}
-
-      {/* 标题居中 */}
-      <div className="flex-1 flex items-center justify-center">
-        <span className="text-xs font-medium text-[var(--color-text-muted)] select-none">
+      {isMac ? (
+        <span
+          className="text-xs font-medium text-[var(--color-text-muted)] select-none"
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: 'none'
+          }}
+        >
           {title}
         </span>
-      </div>
-
-      {/* Windows / Linux 自定义窗口控制 */}
-      {!isMac && (
-        <div className="no-drag flex items-center shrink-0">
-          <WindowButton
-            onClick={() => window.api.minimizeWindow()}
-            title="最小化"
-            icon={<MinimizeIcon />}
-          />
-          <WindowButton
-            onClick={() => window.api.maximizeWindow()}
-            title="最大化"
-            icon={<MaximizeIcon />}
-          />
-          <WindowButton
-            onClick={() => window.api.closeWindow()}
-            title="关闭"
-            icon={<CloseIcon />}
-            danger
-          />
-        </div>
+      ) : (
+        <>
+          <span className="text-xs font-medium text-[var(--color-text-muted)] select-none truncate px-4">
+            {title}
+          </span>
+          <div style={{ flex: 1 }} />
+          <div className="no-drag flex items-center shrink-0">
+            <WindowButton
+              onClick={() => window.api.minimizeWindow()}
+              title="最小化"
+              icon={<MinimizeIcon />}
+            />
+            <WindowButton
+              onClick={() => window.api.maximizeWindow()}
+              title="最大化"
+              icon={<MaximizeIcon />}
+            />
+            <WindowButton
+              onClick={() => window.api.closeWindow()}
+              title="关闭"
+              icon={<CloseIcon />}
+              danger
+            />
+          </div>
+        </>
       )}
     </div>
   )
