@@ -54,6 +54,19 @@ export const IPC_CHANNELS = {
   TASK_DELETE: 'task:delete',
   TASK_EVENT: 'task:event',
 
+  // 计划（Plans：Markdown 文件管理）
+  PLAN_LIST: 'plan:list',
+  PLAN_CREATE: 'plan:create',
+  PLAN_READ: 'plan:read',
+  PLAN_SAVE: 'plan:save',
+  PLAN_DELETE: 'plan:delete',
+  PLAN_IMPORT: 'plan:import',
+  PLAN_GROUP_LIST: 'plan-group:list',
+  PLAN_GROUP_CREATE: 'plan-group:create',
+  PLAN_GROUP_UPDATE: 'plan-group:update',
+  PLAN_GROUP_DELETE: 'plan-group:delete',
+  PLAN_ASSIGN_GROUP: 'plan:assign-group',
+
   // 开发日志（主进程 → 渲染进程实时推送）
   LOG_ENTRY: 'log:entry',
   LOG_GET_BUFFER: 'log:get-buffer',

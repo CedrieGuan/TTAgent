@@ -11,6 +11,7 @@ import { registerSkillHandlers } from './skill.handler'
 import { registerContextHandlers } from './context.handler'
 import { registerMemoryHandlers } from './memory.handler'
 import { registerTaskHandlers } from './task.handler'
+import { registerPlanHandlers } from './plan.handler'
 
 export function registerAllHandlers(): void {
   registerConfigHandlers()
@@ -22,4 +23,5 @@ export function registerAllHandlers(): void {
   registerContextHandlers()
   registerMemoryHandlers()
   registerTaskHandlers()
+  registerPlanHandlers()
 }

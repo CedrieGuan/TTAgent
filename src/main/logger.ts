@@ -137,7 +137,8 @@ export const logger = {
   tool: log.scope('tool'),
   skill: log.scope('skill'),
   context: log.scope('context'),
-  task: log.scope('task')
+  task: log.scope('task'),
+  plan: log.scope('plan')
 }
 
 export default log

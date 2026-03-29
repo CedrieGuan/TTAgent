@@ -21,6 +21,7 @@ import type { Skill, SkillSummary } from '../shared/types/skill.types'
 import type { ContextEvent } from '../shared/types/context.types'
 import type { Memory, MemoryEvent } from '../shared/types/memory.types'
 import type { Task, TaskEvent } from '../shared/types/task.types'
+import type { Plan, PlanWithContent, PlanGroup } from '../shared/types/plan.types'
 
 const api = {
   // ── AI 对话 ──────────────────────────────────────────────────
@@ -179,6 +180,50 @@ const api = {
     ipcRenderer.on(IPC_CHANNELS.TASK_EVENT, listener)
     return () => ipcRenderer.removeListener(IPC_CHANNELS.TASK_EVENT, listener)
   },
+
+  // ── 计划（Plans：Markdown 文件管理） ──────────────────────────────
+  /** 获取所有计划列表 */
+  listPlans: (): Promise<IPCResponse<Plan[]>> => ipcRenderer.invoke(IPC_CHANNELS.PLAN_LIST),
+
+  /** 创建新计划 */
+  createPlan: (title: string): Promise<IPCResponse<Plan>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PLAN_CREATE, title),
+
+  /** 读取计划完整内容 */
+  readPlan: (planId: string): Promise<IPCResponse<PlanWithContent>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PLAN_READ, planId),
+
+  /** 保存计划内容 */
+  savePlan: (planId: string, content: string): Promise<IPCResponse<Plan>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PLAN_SAVE, planId, content),
+
+  /** 删除计划 */
+  deletePlan: (planId: string): Promise<IPCResponse> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PLAN_DELETE, planId),
+
+  /** 导入外部 .md 文件 */
+  importPlans: (filePaths: string[]): Promise<IPCResponse<Plan[]>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PLAN_IMPORT, filePaths),
+
+  // ── 计划分组 ──────────────────────────────────────────────────
+  listPlanGroups: (): Promise<
+    IPCResponse<{ groups: PlanGroup[]; assignments: Record<string, string | null> }>
+  > => ipcRenderer.invoke(IPC_CHANNELS.PLAN_GROUP_LIST),
+
+  createPlanGroup: (name: string): Promise<IPCResponse<PlanGroup>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PLAN_GROUP_CREATE, name),
+
+  updatePlanGroup: (
+    groupId: string,
+    updates: Partial<Pick<PlanGroup, 'name' | 'collapsed'>>
+  ): Promise<IPCResponse<PlanGroup>> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PLAN_GROUP_UPDATE, groupId, updates),
+
+  deletePlanGroup: (groupId: string): Promise<IPCResponse> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PLAN_GROUP_DELETE, groupId),
+
+  assignPlanToGroup: (planId: string, groupId: string | null): Promise<IPCResponse> =>
+    ipcRenderer.invoke(IPC_CHANNELS.PLAN_ASSIGN_GROUP, planId, groupId),
 
   // ── 开发日志 ──────────────────────────────────────────────────
   /** 注册主进程日志推送监听（仅开发环境有效），返回清理函数 */

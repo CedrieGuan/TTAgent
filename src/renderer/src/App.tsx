@@ -6,6 +6,7 @@ import { SkillsPage } from '@pages/SkillsPage'
 import { MCPPage } from '@pages/MCPPage'
 import { MemoryPage } from '@pages/MemoryPage'
 import { TasksPage } from '@pages/TasksPage'
+import { PlansPage } from '@pages/PlansPage'
 import { useStream } from '@hooks/useStream'
 import { useTheme } from '@hooks/useTheme'
 import { useSettingsStore } from '@stores/settings.store'
@@ -13,7 +14,7 @@ import { useSessionStore } from '@stores/session.store'
 import { useSkillStore } from '@stores/skill.store'
 import { useTaskStore } from '@stores/task.store'
 
-type NavPage = 'tasks' | 'skills' | 'mcp' | 'memory' | 'history' | 'settings'
+type NavPage = 'tasks' | 'plans' | 'skills' | 'mcp' | 'memory' | 'history' | 'settings'
 
 export default function App() {
   const [navPage, setNavPage] = useState<NavPage>('tasks')
@@ -42,6 +43,8 @@ export default function App() {
     switch (navPage) {
       case 'tasks':
         return <TasksPage />
+      case 'plans':
+        return <PlansPage />
       case 'skills':
         return <SkillsPage />
       case 'mcp':
