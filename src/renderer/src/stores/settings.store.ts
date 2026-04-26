@@ -38,8 +38,8 @@ const DEFAULT_SETTINGS: AppSettings = {
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   settings: DEFAULT_SETTINGS,
   providers: {
-    anthropic: { provider: DEFAULT_PROVIDER, apiKey: '', defaultModel: DEFAULT_MODEL },
-    zhipuai: { provider: 'zhipuai', apiKey: '', defaultModel: 'glm-4-plus' }
+    anthropic: { provider: 'anthropic', apiKey: '', defaultModel: 'claude-sonnet-4-6' },
+    zhipuai: { provider: 'zhipuai', apiKey: '', defaultModel: DEFAULT_MODEL }
   },
   agentSystemPrompt: 'You are a helpful AI assistant.',
   loaded: false,

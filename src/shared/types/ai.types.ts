@@ -1,5 +1,46 @@
 /** AI 提供商标识 */
-export type AIProvider = 'anthropic' | 'openai' | 'zhipuai' | 'ollama' | 'custom'
+export type AIProvider =
+  | 'anthropic'
+  | 'openai'
+  | 'gemini'
+  | 'mistral'
+  | 'deepseek'
+  | 'zhipuai'
+  | 'openrouter'
+  | 'huggingface'
+  | 'modelscope'
+  | 'nvidia'
+  | 'ollama'
+  | 'custom'
+
+/** 提供商分类 */
+export type ProviderCategory = 'cloud' | 'aggregator' | 'chinese' | 'other'
+
+/** 提供商定义（注册表条目） */
+export interface ProviderDefinition {
+  /** 提供商标识 */
+  id: AIProvider
+  /** 显示名称 */
+  name: string
+  /** 简短描述 */
+  description: string
+  /** 分类 */
+  category: ProviderCategory
+  /** API 协议类型 */
+  apiType: 'anthropic' | 'openai-compatible'
+  /** 默认 API 基础地址（OpenAI 兼容接口使用） */
+  defaultBaseUrl?: string
+  /** 是否需要 API Key */
+  requiresApiKey: boolean
+  /** 是否显示 Base URL 配置项 */
+  showBaseUrl: boolean
+  /** 预定义的模型列表 */
+  models: ModelInfo[]
+  /** 获取 API Key 的官网地址 */
+  website: string
+  /** 品牌色 */
+  color: string
+}
 
 /** 消息角色类型 */
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool'

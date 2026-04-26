@@ -7,7 +7,7 @@
  * 2. Pass 1：卸载超大消息（替换为占位摘要）
  * 3. Pass 2：截断最旧的对话轮次，直到满足硬阈值
  */
-import type { ProviderConfig } from '@shared/types/ai.types'
+import type { ProviderConfig, AIProvider } from '@shared/types/ai.types'
 import type { ChatMessage } from '@shared/types/ai.types'
 import type { MCPTool } from '@shared/types/mcp.types'
 import type {
@@ -29,7 +29,7 @@ import { deriveTurns, flattenTurns } from './context-turns'
 import { createEvent } from './context-events'
 import { store } from '../store'
 import OpenAI from 'openai'
-import { ZHIPUAI_BASE_URL } from '@shared/constants/providers'
+import { PROVIDER_MAP } from '@shared/constants/providers'
 
 /** 格式化 token 数为可读字符串（K/M 单位） */
 function formatTokenCount(n: number): string {
@@ -346,7 +346,7 @@ ${parts.join('\n\n---\n\n')}
 
 /**
  * 调用 LLM 生成摘要
- * 按优先级选择最便宜的可用提供商：智谱 AI > OpenAI > Anthropic
+ * 按优先级选择最便宜的可用提供商
  */
 async function callSummaryLLM(prompt: string): Promise<string | null> {
   const providers = store.get('providers') ?? {}
@@ -356,28 +356,6 @@ async function callSummaryLLM(prompt: string): Promise<string | null> {
   const { provider, config } = cheapest
 
   try {
-    if (provider === 'zhipuai') {
-      const client = new OpenAI({ apiKey: config.apiKey, baseURL: ZHIPUAI_BASE_URL })
-      const response = await client.chat.completions.create({
-        model: config.defaultModel,
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 2000,
-        stream: false
-      })
-      return response.choices[0]?.message?.content ?? null
-    }
-
-    if (provider === 'openai') {
-      const client = new OpenAI({ apiKey: config.apiKey, baseURL: config.baseUrl })
-      const response = await client.chat.completions.create({
-        model: config.defaultModel,
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 2000,
-        stream: false
-      })
-      return response.choices[0]?.message?.content ?? null
-    }
-
     if (provider === 'anthropic') {
       const AnthropicSDK = await import('@anthropic-ai/sdk')
       const client = new AnthropicSDK.default({ apiKey: config.apiKey })
@@ -390,7 +368,19 @@ async function callSummaryLLM(prompt: string): Promise<string | null> {
       return textBlock && 'text' in textBlock ? textBlock.text : null
     }
 
-    return null
+    // 所有 OpenAI 兼容提供商（包括智谱、OpenAI 等）
+    const providerDef = PROVIDER_MAP.get(provider as AIProvider)
+    const baseURL = config.baseUrl || providerDef?.defaultBaseUrl
+    if (!baseURL) return null
+
+    const client = new OpenAI({ apiKey: config.apiKey || 'unused', baseURL })
+    const response = await client.chat.completions.create({
+      model: config.defaultModel,
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 2000,
+      stream: false
+    })
+    return response.choices[0]?.message?.content ?? null
   } catch {
     return null
   }

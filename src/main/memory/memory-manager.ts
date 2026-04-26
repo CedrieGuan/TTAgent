@@ -13,7 +13,7 @@ import { randomUUID } from 'crypto'
 import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import { store } from '../store'
-import { ZHIPUAI_BASE_URL } from '@shared/constants/providers'
+import { PROVIDER_MAP } from '@shared/constants/providers'
 import { IPC_CHANNELS } from '@shared/constants/ipc.channels'
 import { logger } from '../logger'
 import type {
@@ -22,7 +22,7 @@ import type {
   MemoryExtractionResult,
   MemoryEvent
 } from '@shared/types/memory.types'
-import type { ChatMessage } from '@shared/types/ai.types'
+import type { ChatMessage, AIProvider } from '@shared/types/ai.types'
 
 export class MemoryManager {
   private memoriesDir: string
@@ -303,39 +303,24 @@ ${existingWorkspaceText}
       return this.parseExtractionResult(text)
     }
 
-    if (provider === 'openai') {
-      const config = providers['openai']
-      if (!config?.apiKey) throw new Error('OpenAI API Key 未配置')
-      const client = new OpenAI({ apiKey: config.apiKey, baseURL: config.baseUrl })
-      const response = await client.chat.completions.create({
-        model,
-        max_tokens: 1024,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage }
-        ]
-      })
-      const text = response.choices[0]?.message?.content ?? '{}'
-      return this.parseExtractionResult(text)
-    }
+    // 所有 OpenAI 兼容提供商统一处理
+    const config = providers[provider] as { apiKey?: string; baseUrl?: string; defaultModel: string } | undefined
+    if (!config?.apiKey) throw new Error(`${provider} API Key 未配置`)
+    const providerDef = PROVIDER_MAP.get(provider as AIProvider)
+    const baseURL = config.baseUrl || providerDef?.defaultBaseUrl
+    if (!baseURL) throw new Error(`${provider} Base URL 未配置`)
 
-    if (provider === 'zhipuai') {
-      const config = providers['zhipuai']
-      if (!config?.apiKey) throw new Error('智谱 AI API Key 未配置')
-      const client = new OpenAI({ apiKey: config.apiKey, baseURL: ZHIPUAI_BASE_URL })
-      const response = await client.chat.completions.create({
-        model,
-        max_tokens: 1024,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage }
-        ]
-      })
-      const text = response.choices[0]?.message?.content ?? '{}'
-      return this.parseExtractionResult(text)
-    }
-
-    throw new Error(`Provider "${provider}" 暂不支持记忆提取`)
+    const client = new OpenAI({ apiKey: config.apiKey, baseURL })
+    const response = await client.chat.completions.create({
+      model,
+      max_tokens: 1024,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage }
+      ]
+    })
+    const text = response.choices[0]?.message?.content ?? '{}'
+    return this.parseExtractionResult(text)
   }
 
   /** 解析 LLM 返回的 JSON，容错处理非标准输出 */

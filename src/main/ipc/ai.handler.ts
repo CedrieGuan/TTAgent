@@ -10,15 +10,14 @@ import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import { store } from '../store'
 import { IPC_CHANNELS } from '@shared/constants/ipc.channels'
-import { ZHIPUAI_BASE_URL } from '@shared/constants/providers'
+import { PROVIDER_MAP, PROVIDER_MODELS } from '@shared/constants/providers'
 import { persistMessage } from './session.handler'
 import { mcpClients } from './mcp.handler'
 import { ToolRouter } from '../tools/tool-router'
 import { toAnthropicTools, toOpenAITools } from '../tools/tool-schema'
 import type { AIRequestPayload, AIStreamChunk, IPCResponse } from '@shared/types/ipc.types'
-import type { ChatMessage, Attachment } from '@shared/types/ai.types'
+import type { ChatMessage, Attachment, AIProvider } from '@shared/types/ai.types'
 import type { MCPTool } from '@shared/types/mcp.types'
-import { PROVIDER_MODELS } from '@shared/constants/providers'
 import { manageContext, applyMidLoopCheck } from '../lib/context-strategy'
 import { emitContextEvent, createEvent } from '../lib/context-events'
 import { countMessagesTokens, calculateBudget } from '../lib/token-counter'
@@ -465,14 +464,14 @@ async function streamWithTools(opts: {
   if (provider === 'anthropic') {
     return streamAnthropicWithTools(opts, mergedTools)
   }
-  if (provider === 'openai') {
-    return streamOpenAIWithTools(opts, mergedTools)
-  }
-  if (provider === 'zhipuai') {
-    return streamZhipuAIWithTools(opts, mergedTools)
+
+  // 从注册表查找提供商定义，所有 OpenAI 兼容提供商统一处理
+  const providerDef = PROVIDER_MAP.get(provider as AIProvider)
+  if (!providerDef) {
+    throw new Error(`未知的 AI 提供商: ${provider}`)
   }
 
-  throw new Error(`Provider "${provider}" not yet supported`)
+  return streamOpenAICompatibleProvider(opts, mergedTools, providerDef)
 }
 
 // ── Anthropic ─────────────────────────────────────────────────
@@ -744,25 +743,40 @@ function buildOpenAIMessages(messages: ChatMessage[]): OpenAI.Chat.ChatCompletio
   return result
 }
 
-/** OpenAI 流式调用实现 */
-async function streamOpenAIWithTools(
+/**
+ * 通用的 OpenAI 兼容提供商流式调用
+ * 从提供商注册表获取配置（baseUrl、apiKey），适用于所有 OpenAI 兼容接口
+ */
+async function streamOpenAICompatibleProvider(
   opts: {
     sender: Electron.WebContents
     sessionId: string
     messages: ChatMessage[]
+    provider: string
     model: string
     systemPrompt?: string
     maxTokens: number
     signal: AbortSignal
   },
-  tools: MCPTool[]
+  tools: MCPTool[],
+  providerDef: { id: string; name: string; defaultBaseUrl?: string }
 ): Promise<StreamResult> {
   const { sender, sessionId, messages, model, systemPrompt, maxTokens, signal } = opts
   const providers = store.get('providers') ?? {}
-  const config = providers['openai']
-  if (!config?.apiKey) throw new Error('OpenAI API Key 未配置')
+  const config = providers[opts.provider]
+  if (!config?.apiKey && providerDef.defaultBaseUrl !== 'http://localhost:11434/v1') {
+    throw new Error(`${providerDef.name} API Key 未配置`)
+  }
 
-  const client = new OpenAI({ apiKey: config.apiKey, baseURL: config.baseUrl })
+  const baseURL = config?.baseUrl || providerDef.defaultBaseUrl
+  if (!baseURL) {
+    throw new Error(`${providerDef.name} Base URL 未配置`)
+  }
+
+  const client = new OpenAI({
+    apiKey: config?.apiKey || 'unused',
+    baseURL
+  })
 
   const openaiMessages = systemPrompt
     ? [{ role: 'system' as const, content: systemPrompt }, ...buildOpenAIMessages(messages)]
@@ -771,44 +785,6 @@ async function streamOpenAIWithTools(
   const createParams: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
     model,
     messages: openaiMessages,
-    max_tokens: maxTokens,
-    stream: true
-  }
-
-  if (tools.length > 0) {
-    createParams.tools = toOpenAITools(tools)
-  }
-
-  return streamOpenAICompatible(client, createParams, sender, sessionId, signal)
-}
-
-/** 智谱 AI 流式调用实现（使用 OpenAI 兼容接口） */
-async function streamZhipuAIWithTools(
-  opts: {
-    sender: Electron.WebContents
-    sessionId: string
-    messages: ChatMessage[]
-    model: string
-    systemPrompt?: string
-    maxTokens: number
-    signal: AbortSignal
-  },
-  tools: MCPTool[]
-): Promise<StreamResult> {
-  const { sender, sessionId, messages, model, systemPrompt, maxTokens, signal } = opts
-  const providers = store.get('providers') ?? {}
-  const config = providers['zhipuai']
-  if (!config?.apiKey) throw new Error('智谱 AI API Key 未配置')
-
-  const client = new OpenAI({ apiKey: config.apiKey, baseURL: ZHIPUAI_BASE_URL })
-
-  const zhipuMessages = systemPrompt
-    ? [{ role: 'system' as const, content: systemPrompt }, ...buildOpenAIMessages(messages)]
-    : buildOpenAIMessages(messages)
-
-  const createParams: OpenAI.Chat.ChatCompletionCreateParamsStreaming = {
-    model,
-    messages: zhipuMessages,
     max_tokens: maxTokens,
     stream: true
   }
@@ -883,7 +859,7 @@ async function streamOpenAICompatible(
 
 /** 根据提供商和模型名称查找上下文窗口大小，默认 128K */
 function getContextWindow(provider: string, model: string): number {
-  const models = PROVIDER_MODELS[provider as keyof typeof PROVIDER_MODELS]
+  const models = PROVIDER_MODELS[provider]
   if (models) {
     const found = models.find((m) => m.id === model)
     if (found) return found.contextWindow

@@ -36,9 +36,9 @@ const store = new Store<StoreSchema>({
   defaults: {
     providers: {
       anthropic: {
-        provider: DEFAULT_PROVIDER,
+        provider: 'anthropic',
         apiKey: '',
-        defaultModel: DEFAULT_MODEL
+        defaultModel: 'claude-sonnet-4-6'
       },
       zhipuai: {
         provider: 'zhipuai',

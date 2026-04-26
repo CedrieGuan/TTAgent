@@ -7,7 +7,7 @@ import { pushLog } from '@stores/log.store'
 import { useSessionStore } from '@stores/session.store'
 import { useAgentStore } from '@stores/agent.store'
 import { useMemoryStore } from '@stores/memory.store'
-import { PROVIDER_MODELS, PROVIDER_LABELS } from '@shared/constants/providers'
+import { PROVIDER_MODELS, PROVIDER_LABELS, PROVIDER_REGISTRY } from '@shared/constants/providers'
 import type { AIProvider } from '@shared/types/ai.types'
 
 export function ChatPage() {
@@ -27,6 +27,8 @@ export function ChatPage() {
   const { memoryEventsBySession, loadMemories, loaded: memoryLoaded } = useMemoryStore()
   const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
   const [compressing, setCompressing] = useState(false)
+  const [customModelInput, setCustomModelInput] = useState('')
+  const [customModelProvider, setCustomModelProvider] = useState<string | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -66,6 +68,15 @@ export function ChatPage() {
     if (!currentSessionId) return
     await updateModel(currentSessionId, provider, modelId)
     setModelDropdownOpen(false)
+    setCustomModelProvider(null)
+  }
+
+  const handleCustomModelSubmit = async () => {
+    if (!currentSessionId || !customModelProvider || !customModelInput.trim()) return
+    await updateModel(currentSessionId, customModelProvider as AIProvider, customModelInput.trim())
+    setModelDropdownOpen(false)
+    setCustomModelProvider(null)
+    setCustomModelInput('')
   }
 
   const handleConfirmRespond = useCallback(
@@ -123,41 +134,96 @@ export function ChatPage() {
           </button>
 
           {modelDropdownOpen && (
-            <div className="absolute top-full left-0 z-50 mt-1 min-w-[220px] rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-lg overflow-hidden">
-              {(Object.keys(PROVIDER_MODELS) as AIProvider[])
-                .filter((p) => PROVIDER_MODELS[p].length > 0)
-                .map((provider) => (
+            <div className="absolute top-full left-0 z-50 mt-1 min-w-[240px] max-h-[360px] overflow-y-auto rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] shadow-lg">
+              {PROVIDER_REGISTRY.map((providerDef) => {
+                const provider = providerDef.id
+                const models = PROVIDER_MODELS[provider] ?? []
+
+                return (
                   <div key={provider}>
-                    <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] bg-[var(--color-bg-base)]">
+                    <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] bg-[var(--color-bg-base)] sticky top-0">
                       {PROVIDER_LABELS[provider]}
                     </div>
-                    {PROVIDER_MODELS[provider].map((model) => {
-                      const isActive = session?.provider === provider && session?.model === model.id
-                      return (
-                        <button
-                          key={model.id}
-                          onClick={() => handleModelSelect(provider, model.id)}
-                          className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors
-                            ${
-                              isActive
-                                ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]'
-                                : 'text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-2)]'
-                            }`}
-                        >
-                          <span>{model.name}</span>
-                          <div className="flex items-center gap-1 shrink-0">
-                            {model.supportsVision && (
-                              <span className="text-[9px] px-1 py-0.5 rounded bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)]">
-                                视觉
+                    {models.length > 0
+                      ? models.map((model) => {
+                          const isActive = session?.provider === provider && session?.model === model.id
+                          return (
+                            <button
+                              key={model.id}
+                              onClick={() => handleModelSelect(provider as AIProvider, model.id)}
+                              className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors
+                                ${
+                                  isActive
+                                    ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]'
+                                    : 'text-[var(--color-text-primary)] hover:bg-[var(--color-bg-surface-2)]'
+                                }`}
+                            >
+                              <span>{model.name}</span>
+                              <div className="flex items-center gap-1 shrink-0">
+                                {model.supportsVision && (
+                                  <span className="text-[9px] px-1 py-0.5 rounded bg-[var(--color-bg-surface-2)] text-[var(--color-text-muted)]">
+                                    视觉
+                                  </span>
+                                )}
+                                {isActive && <CheckIcon />}
+                              </div>
+                            </button>
+                          )
+                        })
+                      : customModelProvider === provider
+                        ? (
+                            <div className="px-3 py-2 space-y-2">
+                              <input
+                                type="text"
+                                value={customModelInput}
+                                onChange={(e) => setCustomModelInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleCustomModelSubmit()
+                                  if (e.key === 'Escape') setCustomModelProvider(null)
+                                }}
+                                placeholder="输入模型 ID"
+                                className="h-7 w-full rounded border border-[var(--color-border)] bg-[var(--color-bg-surface-2)] px-2 text-xs text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] outline-none focus:border-[var(--color-accent)] no-drag"
+                                autoFocus
+                              />
+                              <div className="flex gap-1.5">
+                                <button
+                                  onClick={handleCustomModelSubmit}
+                                  className="text-[10px] px-2 py-0.5 rounded bg-[var(--color-accent)] text-white hover:opacity-90"
+                                >
+                                  确定
+                                </button>
+                                <button
+                                  onClick={() => setCustomModelProvider(null)}
+                                  className="text-[10px] px-2 py-0.5 rounded text-[var(--color-text-muted)] hover:bg-[var(--color-bg-hover)]"
+                                >
+                                  取消
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        : (
+                            <button
+                              onClick={() => {
+                                setCustomModelProvider(provider)
+                                setCustomModelInput(session?.provider === provider ? session.model : '')
+                              }}
+                              className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs transition-colors
+                                ${
+                                  session?.provider === provider
+                                    ? 'bg-[var(--color-accent)]/10 text-[var(--color-accent)]'
+                                    : 'text-[var(--color-text-muted)] hover:bg-[var(--color-bg-surface-2)]'
+                                }`}
+                            >
+                              <span>
+                                {session?.provider === provider ? session.model : '自定义模型...'}
                               </span>
-                            )}
-                            {isActive && <CheckIcon />}
-                          </div>
-                        </button>
-                      )
-                    })}
+                              {session?.provider === provider && <CheckIcon />}
+                            </button>
+                          )
+                    }
                   </div>
-                ))}
+                )
+              })}
             </div>
           )}
         </div>
